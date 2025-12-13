@@ -198,11 +198,15 @@ function ServicesPreviewSection() {
   ];
 
   return (
-    <section className="section-padding bg-muted/30">
-      <div className="container-wide">
+    <section className="section-padding relative overflow-hidden bg-gradient-to-br from-amber-100 via-orange-50 to-rose-100 dark:from-amber-950/40 dark:via-orange-950/30 dark:to-rose-950/40">
+      {/* Decorative elements */}
+      <div className="absolute top-0 left-0 w-72 h-72 bg-amber-300/40 dark:bg-amber-800/30 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+      <div className="absolute bottom-0 right-0 w-96 h-96 bg-rose-300/30 dark:bg-rose-800/20 rounded-full blur-3xl translate-x-1/3 translate-y-1/3" />
+
+      <div className="container-wide relative">
         {/* Section Header */}
         <div className="text-center mb-12">
-          <p className="text-primary text-sm font-medium uppercase tracking-wider mb-2">
+          <p className="text-amber-700 dark:text-amber-400 text-sm font-medium uppercase tracking-wider mb-2">
             Unsere Leistungen
           </p>
           <h2 className="text-3xl font-bold text-foreground mb-4">
@@ -219,13 +223,13 @@ function ServicesPreviewSection() {
           {services.map((service) => (
             <Card
               key={service.name}
-              className="card-hover border-border/50 bg-card"
+              className="card-hover border-amber-200 dark:border-amber-800/50 bg-white/90 dark:bg-card/90 backdrop-blur-sm shadow-lg shadow-amber-200/50 dark:shadow-none hover:shadow-xl hover:shadow-amber-300/50 dark:hover:shadow-amber-900/30 transition-all duration-300"
             >
               <CardContent className="p-6 text-center">
                 <h3 className="font-semibold text-foreground mb-2">
                   {service.name}
                 </h3>
-                <p className="text-2xl font-bold text-primary mb-1">
+                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mb-1">
                   {service.price}
                 </p>
                 <p className="text-sm text-muted-foreground">{service.duration}</p>
@@ -236,7 +240,7 @@ function ServicesPreviewSection() {
 
         {/* CTA */}
         <div className="text-center">
-          <Button variant="outline" size="lg" asChild>
+          <Button variant="outline" size="lg" className="border-amber-400 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/50 hover:border-amber-500 dark:hover:border-amber-600 text-amber-700 dark:text-amber-300" asChild>
             <Link href="/leistungen">
               Alle Leistungen ansehen
               <ArrowRight className="ml-2 h-4 w-4" />

@@ -119,12 +119,12 @@ CREATE TABLE IF NOT EXISTS deposit_policies (
 
   -- Timestamps
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-
-  -- One active policy per salon
-  CONSTRAINT unique_active_policy_per_salon
-    UNIQUE (salon_id) WHERE is_active = true
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- One active policy per salon (partial unique index)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_policy_per_salon
+ON deposit_policies(salon_id) WHERE is_active = true;
 
 COMMENT ON TABLE deposit_policies IS 'Salon-wide deposit and refund policies';
 
@@ -182,14 +182,20 @@ BEGIN
     RETURN;
   END IF;
 
-  SELECT * INTO v_service FROM services WHERE id = v_appointment.service_id;
+  -- Get the first service from appointment_services
+  SELECT s.* INTO v_service
+  FROM services s
+  JOIN appointment_services aps ON aps.service_id = s.id
+  WHERE aps.appointment_id = p_appointment_id
+  ORDER BY aps.sort_order
+  LIMIT 1;
 
   -- Calculate hours until appointment
-  v_hours_until := EXTRACT(EPOCH FROM (v_appointment.starts_at - NOW())) / 3600;
+  v_hours_until := EXTRACT(EPOCH FROM (v_appointment.start_time - NOW())) / 3600;
 
-  IF v_hours_until >= v_service.deposit_refundable_until THEN
+  IF v_service.id IS NULL OR v_hours_until >= COALESCE(v_service.deposit_refundable_until, 24) THEN
     RETURN QUERY SELECT true, 100, 'Full refund eligible'::TEXT;
-  ELSIF v_hours_until >= (v_service.deposit_refundable_until / 2) THEN
+  ELSIF v_hours_until >= (COALESCE(v_service.deposit_refundable_until, 24) / 2) THEN
     RETURN QUERY SELECT true, 50, 'Partial refund eligible (50%)'::TEXT;
   ELSE
     RETURN QUERY SELECT false, 0, 'Cancellation deadline passed'::TEXT;
@@ -214,8 +220,15 @@ BEGIN
     RAISE EXCEPTION 'Appointment not found';
   END IF;
 
-  SELECT * INTO v_service FROM services WHERE id = v_appointment.service_id;
-  IF NOT v_service.deposit_required THEN
+  -- Get the first service from appointment_services
+  SELECT s.* INTO v_service
+  FROM services s
+  JOIN appointment_services aps ON aps.service_id = s.id
+  WHERE aps.appointment_id = p_appointment_id
+  ORDER BY aps.sort_order
+  LIMIT 1;
+
+  IF v_service.id IS NULL OR NOT v_service.deposit_required THEN
     RETURN NULL;
   END IF;
 
@@ -227,7 +240,7 @@ BEGIN
   ) VALUES (
     p_appointment_id, v_appointment.salon_id, v_appointment.customer_id,
     v_deposit_amount, p_stripe_payment_intent_id,
-    CASE WHEN p_stripe_payment_intent_id IS NOT NULL THEN 'pending' ELSE 'pending' END
+    'pending'
   )
   ON CONFLICT (appointment_id) DO UPDATE SET
     stripe_payment_intent_id = EXCLUDED.stripe_payment_intent_id,
@@ -345,17 +358,22 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE VIEW v_pending_deposits AS
 SELECT
   ad.*,
-  a.starts_at as appointment_starts_at,
+  a.start_time as appointment_starts_at,
   a.status as appointment_status,
   c.first_name || ' ' || c.last_name as customer_name,
-  c.email as customer_email,
-  c.phone as customer_phone,
-  s.name as service_name,
-  EXTRACT(EPOCH FROM (a.starts_at - NOW())) / 3600 as hours_until_appointment
+  p.email as customer_email,
+  p.phone as customer_phone,
+  aps.service_name as service_name,
+  EXTRACT(EPOCH FROM (a.start_time - NOW())) / 3600 as hours_until_appointment
 FROM appointment_deposits ad
 JOIN appointments a ON ad.appointment_id = a.id
 JOIN customers c ON ad.customer_id = c.id
-JOIN services s ON a.service_id = s.id
+JOIN profiles p ON c.profile_id = p.id
+LEFT JOIN LATERAL (
+  SELECT service_name FROM appointment_services
+  WHERE appointment_id = a.id
+  ORDER BY sort_order LIMIT 1
+) aps ON true
 WHERE ad.status IN ('pending', 'paid');
 
 COMMENT ON VIEW v_pending_deposits IS 'Active deposits with appointment details';
@@ -390,7 +408,7 @@ ON appointment_deposits FOR SELECT
 TO authenticated
 USING (
   customer_id IN (
-    SELECT id FROM customers WHERE user_id = auth.uid()
+    SELECT id FROM customers WHERE profile_id = auth.uid()
   )
 );
 
@@ -400,7 +418,7 @@ ON appointment_deposits FOR SELECT
 TO authenticated
 USING (
   salon_id IN (
-    SELECT salon_id FROM staff WHERE user_id = auth.uid()
+    SELECT salon_id FROM staff WHERE profile_id = auth.uid()
   )
 );
 
@@ -410,9 +428,10 @@ ON appointment_deposits FOR ALL
 TO authenticated
 USING (
   salon_id IN (
-    SELECT salon_id FROM staff
-    WHERE user_id = auth.uid()
-    AND role IN ('admin', 'manager')
+    SELECT s.salon_id FROM staff s
+    JOIN user_roles ur ON ur.profile_id = s.profile_id AND ur.salon_id = s.salon_id
+    WHERE s.profile_id = auth.uid()
+    AND ur.role_name IN ('admin', 'manager')
   )
 );
 
@@ -422,9 +441,10 @@ ON deposit_policies FOR ALL
 TO authenticated
 USING (
   salon_id IN (
-    SELECT salon_id FROM staff
-    WHERE user_id = auth.uid()
-    AND role = 'admin'
+    SELECT s.salon_id FROM staff s
+    JOIN user_roles ur ON ur.profile_id = s.profile_id AND ur.salon_id = s.salon_id
+    WHERE s.profile_id = auth.uid()
+    AND ur.role_name = 'admin'
   )
 );
 

@@ -72,7 +72,8 @@ CREATE TYPE waitlist_status AS ENUM (
   'active',     -- Actively waiting
   'notified',   -- Customer was notified of availability
   'converted',  -- Converted to booking
-  'cancelled'   -- Customer cancelled waitlist entry
+  'cancelled',  -- Customer cancelled waitlist entry
+  'expired'     -- Waitlist entry expired (past preferred date)
 );
 
 -- Blocked time type enum

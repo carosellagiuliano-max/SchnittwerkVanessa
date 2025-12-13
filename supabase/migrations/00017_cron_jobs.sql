@@ -76,6 +76,30 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
 COMMENT ON TABLE audit_logs IS 'Audit trail for critical actions';
 
 -- ============================================
+-- LEGAL DOCUMENTS TABLE
+-- Store legal documents (AGB, Datenschutz, etc.)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS legal_documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  salon_id UUID REFERENCES salons(id) ON DELETE CASCADE,
+  type TEXT NOT NULL, -- 'agb', 'datenschutz', 'widerruf'
+  version INTEGER NOT NULL DEFAULT 1,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  valid_from TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT unique_legal_doc_version UNIQUE (salon_id, type, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_legal_documents_salon ON legal_documents(salon_id);
+CREATE INDEX IF NOT EXISTS idx_legal_documents_type ON legal_documents(type);
+
+COMMENT ON TABLE legal_documents IS 'Legal documents (Terms, Privacy Policy, etc.)';
+
+-- ============================================
 -- LEGAL DOCUMENT ACCEPTANCE (for booking/checkout)
 -- ============================================
 

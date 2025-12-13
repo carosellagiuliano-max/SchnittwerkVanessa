@@ -7,10 +7,16 @@ import { createClient } from '@supabase/supabase-js';
 // Handles Stripe webhook events with idempotency
 // ============================================
 
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-11-17.clover',
-});
+// Initialize Stripe (lazy initialization to avoid build-time errors)
+function getStripe(): Stripe {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error('STRIPE_SECRET_KEY is not configured');
+  }
+  return new Stripe(secretKey, {
+    apiVersion: '2025-11-17.clover',
+  });
+}
 
 // Initialize Supabase Admin Client (bypasses RLS)
 const supabaseAdmin = createClient(
@@ -77,6 +83,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Verify webhook signature
     let event: Stripe.Event;
     try {
+      const stripe = getStripe();
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Unknown error';

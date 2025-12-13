@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  Sparkles,
+  ArrowRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -26,7 +28,7 @@ import type { OrderStatus } from '@/lib/domain/order/types';
 
 export const metadata: Metadata = {
   title: 'Meine Bestellungen',
-  description: 'Übersicht über Ihre Bestellungen',
+  description: 'Uebersicht ueber Ihre Bestellungen',
 };
 
 // ============================================
@@ -56,22 +58,22 @@ function getStatusIcon(status: OrderStatus) {
 function getStatusBadge(status: OrderStatus) {
   const statusConfig: Record<
     OrderStatus,
-    { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }
+    { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }
   > = {
-    pending: { label: 'Ausstehend', variant: 'outline' },
-    paid: { label: 'Bezahlt', variant: 'default' },
-    processing: { label: 'In Bearbeitung', variant: 'secondary' },
-    shipped: { label: 'Versendet', variant: 'secondary' },
-    delivered: { label: 'Zugestellt', variant: 'default' },
-    completed: { label: 'Abgeschlossen', variant: 'default' },
-    cancelled: { label: 'Storniert', variant: 'destructive' },
-    refunded: { label: 'Erstattet', variant: 'destructive' },
+    pending: { label: 'Ausstehend', variant: 'outline', className: 'border-amber-500/50 text-amber-600 bg-amber-500/10' },
+    paid: { label: 'Bezahlt', variant: 'default', className: 'bg-emerald-500/10 text-emerald-600 border-0' },
+    processing: { label: 'In Bearbeitung', variant: 'secondary', className: 'bg-blue-500/10 text-blue-600 border-0' },
+    shipped: { label: 'Versendet', variant: 'secondary', className: 'bg-purple-500/10 text-purple-600 border-0' },
+    delivered: { label: 'Zugestellt', variant: 'default', className: 'bg-emerald-500/10 text-emerald-600 border-0' },
+    completed: { label: 'Abgeschlossen', variant: 'default', className: 'bg-emerald-500/10 text-emerald-600 border-0' },
+    cancelled: { label: 'Storniert', variant: 'destructive', className: 'bg-destructive/10 text-destructive border-0' },
+    refunded: { label: 'Erstattet', variant: 'destructive', className: 'bg-destructive/10 text-destructive border-0' },
   };
 
   const config = statusConfig[status] || { label: status, variant: 'outline' as const };
 
   return (
-    <Badge variant={config.variant} className="gap-1">
+    <Badge variant={config.variant} className={`gap-1.5 ${config.className || ''}`}>
       {getStatusIcon(status)}
       {config.label}
     </Badge>
@@ -97,20 +99,22 @@ export default async function OrderHistoryPage() {
   const { data: customer } = await supabase
     .from('customers')
     .select('id')
-    .eq('user_id', user.id)
+    .eq('profile_id', user.id)
     .single();
 
   if (!customer) {
     return (
-      <div className="container max-w-4xl py-8">
-        <div className="text-center py-12">
-          <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h1 className="text-2xl font-bold mb-2">Kein Kundenprofil gefunden</h1>
-          <p className="text-muted-foreground mb-6">
-            Bitte vervollständigen Sie Ihr Profil, um Bestellungen zu sehen.
+      <div className="container max-w-4xl py-12 md:py-16">
+        <div className="text-center py-16">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-muted to-muted/30 flex items-center justify-center">
+            <AlertCircle className="h-10 w-10 text-muted-foreground/40" />
+          </div>
+          <h1 className="text-2xl md:text-3xl font-bold mb-3">Kein Kundenprofil gefunden</h1>
+          <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+            Bitte vervollstaendigen Sie Ihr Profil, um Bestellungen zu sehen.
           </p>
-          <Button asChild>
-            <Link href="/konto/profil">Profil vervollständigen</Link>
+          <Button asChild className="btn-glow rounded-full px-6">
+            <Link href="/konto/profil">Profil vervollstaendigen</Link>
           </Button>
         </div>
       </div>
@@ -128,39 +132,58 @@ export default async function OrderHistoryPage() {
   const hasOrders = (allOrders?.length || 0) > 0;
 
   return (
-    <div className="container max-w-4xl py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Meine Bestellungen</h1>
-        <p className="text-muted-foreground">
-          Übersicht über alle Ihre Bestellungen
+    <div className="container max-w-4xl py-12 md:py-16 animate-fade-in">
+      {/* Header */}
+      <div className="mb-10">
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
+          <Package className="h-4 w-4" />
+          Bestellungen
+        </div>
+        <h1 className="text-3xl md:text-4xl font-bold mb-3 tracking-tight">
+          Meine{' '}
+          <span className="text-gradient-primary">Bestellungen</span>
+        </h1>
+        <p className="text-muted-foreground text-lg">
+          Uebersicht ueber alle Ihre Bestellungen
         </p>
       </div>
 
       {!hasOrders ? (
         // Empty State
-        <Card>
-          <CardContent className="py-12">
+        <Card className="card-elegant overflow-hidden">
+          <CardContent className="py-16">
             <div className="text-center">
-              <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                <ShoppingBag className="h-8 w-8 text-muted-foreground" />
+              <div className="h-24 w-24 rounded-3xl bg-gradient-to-br from-muted to-muted/30 flex items-center justify-center mx-auto mb-6">
+                <ShoppingBag className="h-12 w-12 text-muted-foreground/40" />
               </div>
               <h2 className="text-xl font-semibold mb-2">Noch keine Bestellungen</h2>
-              <p className="text-muted-foreground mb-6">
-                Sie haben noch keine Bestellungen aufgegeben.
+              <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+                Sie haben noch keine Bestellungen aufgegeben. Entdecken Sie unsere Produkte und Gutscheine.
               </p>
-              <Button asChild>
-                <Link href="/shop">Zum Shop</Link>
+              <Button asChild size="lg" className="btn-glow rounded-full px-8">
+                <Link href="/shop">
+                  Zum Shop
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
               </Button>
             </div>
           </CardContent>
         </Card>
       ) : (
         <Tabs defaultValue="active" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="active">
+          <TabsList className="grid w-full grid-cols-2 h-12 p-1 bg-muted/50 rounded-xl">
+            <TabsTrigger
+              value="active"
+              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-300"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
               Aktiv ({activeOrders.length})
             </TabsTrigger>
-            <TabsTrigger value="past">
+            <TabsTrigger
+              value="past"
+              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-300"
+            >
+              <CheckCircle2 className="h-4 w-4 mr-2" />
               Vergangene ({pastOrders.length})
             </TabsTrigger>
           </TabsList>
@@ -168,16 +191,19 @@ export default async function OrderHistoryPage() {
           {/* Active Orders */}
           <TabsContent value="active" className="space-y-4">
             {activeOrders.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center">
+              <Card className="card-elegant">
+                <CardContent className="py-12 text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted/50 flex items-center justify-center">
+                    <Package className="h-8 w-8 text-muted-foreground/40" />
+                  </div>
                   <p className="text-muted-foreground">
                     Keine aktiven Bestellungen
                   </p>
                 </CardContent>
               </Card>
             ) : (
-              activeOrders.map((order) => (
-                <OrderCard key={order.id} order={order} />
+              activeOrders.map((order, index) => (
+                <OrderCard key={order.id} order={order} index={index} />
               ))
             )}
           </TabsContent>
@@ -185,16 +211,19 @@ export default async function OrderHistoryPage() {
           {/* Past Orders */}
           <TabsContent value="past" className="space-y-4">
             {pastOrders.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center">
+              <Card className="card-elegant">
+                <CardContent className="py-12 text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted/50 flex items-center justify-center">
+                    <Clock className="h-8 w-8 text-muted-foreground/40" />
+                  </div>
                   <p className="text-muted-foreground">
                     Keine vergangenen Bestellungen
                   </p>
                 </CardContent>
               </Card>
             ) : (
-              pastOrders.map((order) => (
-                <OrderCard key={order.id} order={order} />
+              pastOrders.map((order, index) => (
+                <OrderCard key={order.id} order={order} index={index} />
               ))
             )}
           </TabsContent>
@@ -218,35 +247,48 @@ interface OrderCardProps {
     createdAt: Date;
     paidAt?: Date;
   };
+  index: number;
 }
 
-function OrderCard({ order }: OrderCardProps) {
+function OrderCard({ order, index }: OrderCardProps) {
   return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-4">
-        <Link href={`/konto/bestellungen/${order.id}`}>
+    <Card
+      className="card-elegant group overflow-hidden animate-fade-in"
+      style={{ animationDelay: `${index * 50}ms` }}
+    >
+      <CardContent className="p-0">
+        <Link href={`/konto/bestellungen/${order.id}`} className="block p-5 md:p-6">
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <span className="font-mono font-semibold">{order.orderNumber}</span>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="font-mono font-semibold text-primary">{order.orderNumber}</span>
                 {getStatusBadge(order.status)}
               </div>
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <span>{formatDate(order.createdAt)}</span>
-                <span>•</span>
-                <span>{order.itemCount} Artikel</span>
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" />
+                  {formatDate(order.createdAt)}
+                </span>
+                <span className="w-1 h-1 rounded-full bg-border" />
+                <span className="flex items-center gap-1.5">
+                  <Package className="h-3.5 w-3.5" />
+                  {order.itemCount} {order.itemCount === 1 ? 'Artikel' : 'Artikel'}
+                </span>
               </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right">
-                <p className="font-semibold">{formatPrice(order.totalCents)}</p>
+                <p className="text-lg font-bold text-primary">{formatPrice(order.totalCents)}</p>
                 {order.paidAt && (
-                  <p className="text-xs text-muted-foreground">
-                    Bezahlt am {formatDate(order.paidAt)}
+                  <p className="text-xs text-muted-foreground flex items-center justify-end gap-1">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                    {formatDate(order.paidAt)}
                   </p>
                 )}
               </div>
-              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              <div className="w-10 h-10 rounded-xl bg-muted/50 flex items-center justify-center transition-all duration-300 group-hover:bg-primary/10 group-hover:text-primary">
+                <ChevronRight className="h-5 w-5 text-muted-foreground transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-primary" />
+              </div>
             </div>
           </div>
         </Link>

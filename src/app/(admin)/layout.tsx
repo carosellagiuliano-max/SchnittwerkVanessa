@@ -25,9 +25,9 @@ export const metadata: Metadata = {
 // Types
 interface StaffMemberRow {
   id: string;
-  role: string;
   display_name: string | null;
   salon_id: string;
+  job_title: string | null;
 }
 
 export default async function AdminLayout({
@@ -50,9 +50,9 @@ export default async function AdminLayout({
     }
 
     return (
-      <div className="flex h-screen bg-background">
+      <div className="flex h-screen bg-gradient-to-br from-background via-background to-muted/20">
         {/* Mock Mode Banner */}
-        <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500 text-amber-950 text-center text-xs py-1 font-medium">
+        <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-amber-500 to-amber-400 text-amber-950 text-center text-xs py-1.5 font-medium tracking-wide shadow-sm">
           DEMO-MODUS - Keine echte Datenbank verbunden
         </div>
 
@@ -77,11 +77,28 @@ export default async function AdminLayout({
           />
 
           {/* Page Content */}
-          <main className="flex-1 overflow-auto p-6">{children}</main>
+          <main className="flex-1 overflow-auto">
+            <div className="p-6 lg:p-8 animate-fade-in">
+              {children}
+            </div>
+          </main>
         </div>
 
         {/* Toast Notifications */}
-        <Toaster position="bottom-right" />
+        <Toaster
+          position="bottom-right"
+          toastOptions={{
+            classNames: {
+              toast: 'bg-card/95 backdrop-blur-xl border-border/50 shadow-elegant',
+              title: 'text-foreground font-medium',
+              description: 'text-muted-foreground',
+              success: 'border-l-4 border-l-emerald-500',
+              error: 'border-l-4 border-l-destructive',
+              warning: 'border-l-4 border-l-amber-500',
+              info: 'border-l-4 border-l-primary',
+            },
+          }}
+        />
       </div>
     );
   }
@@ -97,30 +114,38 @@ export default async function AdminLayout({
     redirect('/admin/login');
   }
 
-  // Check admin role
+  // Check if user is active staff member or admin
   const { data: staffMember } = await supabase
     .from('staff')
-    .select('id, role, display_name, salon_id')
-    .eq('user_id', user.id)
+    .select('id, display_name, salon_id, job_title')
+    .eq('profile_id', user.id)
+    .eq('is_active', true)
     .single() as { data: StaffMemberRow | null };
 
-  if (!staffMember) {
+  // Allow admin email even without staff entry
+  const isAdminEmail = user.email === 'admin@schnittwerk.ch';
+
+  if (!staffMember && !isAdminEmail) {
     redirect('/admin/login?error=unauthorized');
   }
 
-  const allowedRoles = ['admin', 'manager', 'staff', 'hq'];
-  if (!allowedRoles.includes(staffMember.role)) {
-    redirect('/admin/login?error=unauthorized');
-  }
+  // Determine role based on job_title or admin status
+  const userRole = isAdminEmail ? 'admin' : (staffMember?.job_title?.toLowerCase().includes('admin') ? 'admin' : 'staff');
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-gradient-to-br from-background via-background to-muted/20">
+      {/* Subtle decorative background */}
+      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full bg-gradient-radial from-primary/3 via-transparent to-transparent blur-3xl" />
+        <div className="absolute bottom-0 left-1/4 w-[400px] h-[400px] rounded-full bg-gradient-radial from-rose/3 via-transparent to-transparent blur-3xl" />
+      </div>
+
       {/* Sidebar */}
       <AdminSidebar
         user={{
-          name: staffMember.display_name || user.email || 'Admin',
+          name: staffMember?.display_name || user.email || 'Admin',
           email: user.email || '',
-          role: staffMember.role,
+          role: userRole,
         }}
       />
 
@@ -129,18 +154,35 @@ export default async function AdminLayout({
         {/* Header */}
         <AdminHeader
           user={{
-            name: staffMember.display_name || user.email || 'Admin',
+            name: staffMember?.display_name || user.email || 'Admin',
             email: user.email || '',
-            role: staffMember.role,
+            role: userRole,
           }}
         />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <main className="flex-1 overflow-auto">
+          <div className="p-6 lg:p-8 animate-fade-in">
+            {children}
+          </div>
+        </main>
       </div>
 
       {/* Toast Notifications */}
-      <Toaster position="bottom-right" />
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          classNames: {
+            toast: 'bg-card/95 backdrop-blur-xl border-border/50 shadow-elegant',
+            title: 'text-foreground font-medium',
+            description: 'text-muted-foreground',
+            success: 'border-l-4 border-l-emerald-500',
+            error: 'border-l-4 border-l-destructive',
+            warning: 'border-l-4 border-l-amber-500',
+            info: 'border-l-4 border-l-primary',
+          },
+        }}
+      />
     </div>
   );
 }

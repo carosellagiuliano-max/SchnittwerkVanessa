@@ -10,12 +10,15 @@ export {
   getBookableServices,
   getAddonServices,
   getPublicSalonData,
+  updateOpeningHours,
   type Salon,
   type OpeningHour,
   type ServiceCategory,
   type Service,
   type ServiceLengthVariant,
   type AddonService,
+  type UpdateOpeningHoursInput,
+  type UpdateOpeningHoursResult,
 } from './salon';
 
 // Staff data
@@ -91,3 +94,17 @@ export {
   type CancelResult,
   type UpdateProfileResult,
 } from './customer';
+
+// Service Management (Admin CRUD)
+export {
+  getServiceCategories,
+  getAllServicesForAdmin,
+  createService,
+  updateService,
+  deleteService,
+  restoreService,
+  type ServiceForAdmin,
+  type CreateServiceInput,
+  type UpdateServiceInput,
+  type ServiceResult,
+} from './services';

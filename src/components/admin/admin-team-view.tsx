@@ -65,7 +65,8 @@ import { toast } from 'sonner';
 
 interface StaffMember {
   id: string;
-  user_id: string | null;
+  salon_id: string;
+  profile_id: string | null;
   display_name: string;
   email: string | null;
   phone: string | null;
@@ -73,7 +74,7 @@ interface StaffMember {
   color: string | null;
   is_active: boolean;
   created_at: string;
-  working_hours: Record<string, unknown> | null;
+  default_schedule: Record<string, unknown> | null;
   employment_type: string | null;
   hire_date: string | null;
   bio: string | null;
@@ -99,8 +100,23 @@ interface Absence {
 interface StaffSkill {
   staff_id: string;
   service_id: string;
-  proficiency_level: string;
+  skill_level: number | null;
 }
+
+// Mapping between numeric skill_level (DB) and string proficiency (UI)
+const skillLevelToString = (level: number | null): string => {
+  if (level === null) return '';
+  if (level <= 2) return 'beginner';
+  if (level === 3) return 'standard';
+  return 'expert';
+};
+
+const stringToSkillLevel = (str: string): number | null => {
+  if (str === 'beginner') return 1;
+  if (str === 'standard') return 3;
+  if (str === 'expert') return 5;
+  return null;
+};
 
 interface WorkingHour {
   id: string;
@@ -192,7 +208,7 @@ export function AdminTeamView({
 
   // Skills Dialog
   const [skillsDialogOpen, setSkillsDialogOpen] = useState(false);
-  const [editingSkills, setEditingSkills] = useState<Record<string, string>>({});
+  const [editingSkills, setEditingSkills] = useState<Record<string, boolean>>({});
 
   // Absence Dialog
   const [absenceDialogOpen, setAbsenceDialogOpen] = useState(false);
@@ -201,6 +217,17 @@ export function AdminTeamView({
     endDate: '',
     type: 'vacation',
     notes: '',
+  });
+
+  // Add Staff Dialog
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [newStaff, setNewStaff] = useState({
+    display_name: '',
+    email: '',
+    phone: '',
+    role: 'staff',
+    color: '#3b82f6',
+    employment_type: 'full_time',
   });
 
   const [isSaving, setIsSaving] = useState(false);
@@ -247,78 +274,103 @@ export function AdminTeamView({
     setIsSaving(true);
     const supabase = createBrowserClient();
 
-    // Delete existing hours
-    await supabase.from('staff_working_hours').delete().eq('staff_id', selectedMember.id);
+    try {
+      // Delete existing hours
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: deleteError } = await (supabase
+        .from('staff_working_hours') as any)
+        .delete()
+        .eq('staff_id', selectedMember.id);
 
-    // Insert new hours
-    const hoursToInsert = Object.entries(editingHours)
-      .filter(([_, hours]) => hours.active)
-      .map(([day, hours]) => ({
-        staff_id: selectedMember.id,
-        day_of_week: parseInt(day),
-        start_time: hours.start,
-        end_time: hours.end,
-        is_active: true,
-      }));
-
-    if (hoursToInsert.length > 0) {
-      const { error } = await supabase.from('staff_working_hours').insert(hoursToInsert);
-      if (error) {
-        toast.error('Fehler beim Speichern der Arbeitszeiten');
+      if (deleteError) {
+        console.error('Delete error:', deleteError);
+        toast.error('Fehler beim Löschen der alten Arbeitszeiten');
         setIsSaving(false);
         return;
       }
-    }
 
-    toast.success('Arbeitszeiten gespeichert');
-    setHoursDialogOpen(false);
-    router.refresh();
-    setIsSaving(false);
+      // Insert new hours
+      const hoursToInsert = Object.entries(editingHours)
+        .filter(([_, hours]) => hours.active)
+        .map(([day, hours]) => ({
+          staff_id: selectedMember.id,
+          day_of_week: parseInt(day),
+          start_time: hours.start,
+          end_time: hours.end,
+          is_active: true,
+        }));
+
+      if (hoursToInsert.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: insertError } = await (supabase
+          .from('staff_working_hours') as any)
+          .insert(hoursToInsert);
+
+        if (insertError) {
+          console.error('Insert error:', insertError);
+          toast.error('Fehler beim Speichern der Arbeitszeiten');
+          setIsSaving(false);
+          return;
+        }
+      }
+
+      toast.success('Arbeitszeiten gespeichert');
+      setHoursDialogOpen(false);
+      router.refresh();
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      toast.error('Unerwarteter Fehler beim Speichern');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  // Open skills dialog
+  // Open skills dialog (now called "Leistungen zuordnen")
   const openSkillsDialog = (member: StaffMember) => {
     setSelectedMember(member);
     const staffSkills = getStaffSkills(member.id);
-    const skillsMap: Record<string, string> = {};
+    const skillsMap: Record<string, boolean> = {};
 
     services.forEach((service) => {
       const skill = staffSkills.find((s) => s.service_id === service.id);
-      skillsMap[service.id] = skill?.proficiency_level || '';
+      skillsMap[service.id] = !!skill; // true if assigned, false otherwise
     });
 
     setEditingSkills(skillsMap);
     setSkillsDialogOpen(true);
   };
 
-  // Save skills
+  // Save service assignments
   const handleSaveSkills = async () => {
     if (!selectedMember) return;
     setIsSaving(true);
     const supabase = createBrowserClient();
 
-    // Delete existing skills
-    await supabase.from('staff_skills').delete().eq('staff_id', selectedMember.id);
+    // Delete existing service assignments
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase.from('staff_service_skills') as any).delete().eq('staff_id', selectedMember.id);
 
-    // Insert new skills
+    // Insert new service assignments (only where checked = true)
     const skillsToInsert = Object.entries(editingSkills)
-      .filter(([_, level]) => level !== '')
-      .map(([serviceId, level]) => ({
+      .filter(([_, isAssigned]) => isAssigned)
+      .map(([serviceId]) => ({
         staff_id: selectedMember.id,
         service_id: serviceId,
-        proficiency_level: level,
+        skill_level: 3, // Default skill level
       }));
 
     if (skillsToInsert.length > 0) {
-      const { error } = await supabase.from('staff_skills').insert(skillsToInsert);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.from('staff_service_skills') as any).insert(skillsToInsert);
       if (error) {
-        toast.error('Fehler beim Speichern der Skills');
+        console.error('Error saving service assignments:', error);
+        toast.error('Fehler beim Speichern der Leistungen');
         setIsSaving(false);
         return;
       }
     }
 
-    toast.success('Skills gespeichert');
+    toast.success('Leistungen zugeordnet');
     setSkillsDialogOpen(false);
     router.refresh();
     setIsSaving(false);
@@ -346,7 +398,9 @@ export function AdminTeamView({
     setIsSaving(true);
     const supabase = createBrowserClient();
 
-    const { error } = await supabase.from('staff_absences').insert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from('staff_absences') as any).insert({
+      salon_id: selectedMember.salon_id,
       staff_id: selectedMember.id,
       start_date: newAbsence.startDate,
       end_date: newAbsence.endDate,
@@ -375,15 +429,30 @@ export function AdminTeamView({
     if (!selectedMember) return;
     const supabase = createBrowserClient();
 
-    const { error } = await supabase
-      .from('staff')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
+    // Deactivate staff and make them non-bookable
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from('staff') as any)
+      .update({
+        is_active: false,
+        is_bookable: false,
+        updated_at: new Date().toISOString()
+      })
       .eq('id', selectedMember.id);
 
     if (error) {
+      console.error('Deactivate error:', error);
       toast.error('Fehler beim Deaktivieren');
     } else {
       toast.success('Mitarbeiter deaktiviert');
+      // Invalidate caches
+      try {
+        const res1 = await fetch('/api/revalidate?tag=booking', { method: 'POST' });
+        console.log('Revalidate booking:', res1.status);
+        const res2 = await fetch('/api/revalidate?tag=staff', { method: 'POST' });
+        console.log('Revalidate staff:', res2.status);
+      } catch (e) {
+        console.error('Revalidation error:', e);
+      }
       router.refresh();
     }
 
@@ -394,17 +463,79 @@ export function AdminTeamView({
   const handleActivate = async (member: StaffMember) => {
     const supabase = createBrowserClient();
 
-    const { error } = await supabase
-      .from('staff')
-      .update({ is_active: true, updated_at: new Date().toISOString() })
+    // Reactivate staff and make them bookable again
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from('staff') as any)
+      .update({
+        is_active: true,
+        is_bookable: true,
+        updated_at: new Date().toISOString()
+      })
       .eq('id', member.id);
 
     if (error) {
       toast.error('Fehler beim Aktivieren');
     } else {
       toast.success('Mitarbeiter aktiviert');
+      // Invalidate caches
+      fetch('/api/revalidate?tag=booking', { method: 'POST' }).catch(() => {});
+      fetch('/api/revalidate?tag=staff', { method: 'POST' }).catch(() => {});
       router.refresh();
     }
+  };
+
+  // Add new staff member
+  const handleAddStaff = async () => {
+    if (!newStaff.display_name.trim()) {
+      toast.error('Bitte geben Sie einen Namen ein');
+      return;
+    }
+
+    // Get salon_id from existing staff or use default
+    const existingStaff = staff[0];
+    const salonId = existingStaff?.salon_id || '550e8400-e29b-41d4-a716-446655440001';
+
+    // Calculate next sort_order
+    const maxSortOrder = Math.max(...staff.map(s => (s as StaffMember & { sort_order?: number }).sort_order || 0), 0);
+
+    setIsSaving(true);
+    const supabase = createBrowserClient();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from('staff') as any).insert({
+      salon_id: salonId,
+      display_name: newStaff.display_name.trim(),
+      email: newStaff.email.trim() || null,
+      phone: newStaff.phone.trim() || null,
+      role: newStaff.role,
+      color: newStaff.color,
+      employment_type: newStaff.employment_type,
+      is_active: true,
+      is_bookable: true,
+      sort_order: maxSortOrder + 1,
+    });
+
+    if (error) {
+      console.error('Error adding staff:', error);
+      toast.error('Fehler beim Hinzufügen des Mitarbeiters');
+    } else {
+      toast.success('Mitarbeiter hinzugefügt');
+      setAddDialogOpen(false);
+      setNewStaff({
+        display_name: '',
+        email: '',
+        phone: '',
+        role: 'staff',
+        color: '#3b82f6',
+        employment_type: 'full_time',
+      });
+      // Invalidate caches so new staff appears everywhere
+      fetch('/api/revalidate?tag=booking', { method: 'POST' }).catch(() => {});
+      fetch('/api/revalidate?tag=staff', { method: 'POST' }).catch(() => {});
+      router.refresh();
+    }
+
+    setIsSaving(false);
   };
 
   return (
@@ -416,7 +547,7 @@ export function AdminTeamView({
             {activeStaff.length} aktive Mitarbeiter
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setAddDialogOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Mitarbeiter hinzufügen
         </Button>
@@ -426,7 +557,7 @@ export function AdminTeamView({
         <TabsList>
           <TabsTrigger value="overview">Übersicht</TabsTrigger>
           <TabsTrigger value="absences">Abwesenheiten ({absences.length})</TabsTrigger>
-          <TabsTrigger value="skills">Skills</TabsTrigger>
+          <TabsTrigger value="skills">Leistungen</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -486,7 +617,7 @@ export function AdminTeamView({
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openSkillsDialog(member)}>
                             <Award className="h-4 w-4 mr-2" />
-                            Skills
+                            Leistungen
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openAbsenceDialog(member)}>
                             <Calendar className="h-4 w-4 mr-2" />
@@ -643,11 +774,14 @@ export function AdminTeamView({
           </Card>
         </TabsContent>
 
-        {/* Skills Tab */}
+        {/* Leistungs-Übersicht Tab */}
         <TabsContent value="skills">
           <Card>
             <CardHeader>
-              <CardTitle>Skills Matrix</CardTitle>
+              <CardTitle>Leistungs-Übersicht</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Übersicht welche Mitarbeiter welche Leistungen ausführen können
+              </p>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -671,13 +805,12 @@ export function AdminTeamView({
                             {member.display_name}
                           </TableCell>
                           {services.map((service) => {
-                            const skill = memberSkills.find((s) => s.service_id === service.id);
-                            const level = skill ? proficiencyLevels[skill.proficiency_level] : null;
+                            const isAssigned = memberSkills.some((s) => s.service_id === service.id);
                             return (
                               <TableCell key={service.id} className="text-center">
-                                {level ? (
-                                  <Badge className={`${level.color} text-white text-xs`}>
-                                    {level.label}
+                                {isAssigned ? (
+                                  <Badge variant="default" className="bg-green-500 text-white">
+                                    ✓
                                   </Badge>
                                 ) : (
                                   <span className="text-muted-foreground">-</span>
@@ -785,37 +918,41 @@ export function AdminTeamView({
         </DialogContent>
       </Dialog>
 
-      {/* Skills Dialog */}
+      {/* Leistungen zuordnen Dialog */}
       <Dialog open={skillsDialogOpen} onOpenChange={setSkillsDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Skills - {selectedMember?.display_name}</DialogTitle>
+            <DialogTitle>Leistungen zuordnen - {selectedMember?.display_name}</DialogTitle>
             <DialogDescription>
-              Wählen Sie die Dienstleistungen und Kompetenz-Level
+              Wählen Sie die Leistungen, die dieser Mitarbeiter ausführen kann
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4 max-h-96 overflow-y-auto">
+          <div className="space-y-3 py-4 max-h-96 overflow-y-auto">
             {services.map((service) => (
-              <div key={service.id} className="flex items-center justify-between gap-4">
-                <span className="font-medium">{service.name}</span>
-                <Select
-                  value={editingSkills[service.id] || ''}
-                  onValueChange={(value) =>
-                    setEditingSkills({ ...editingSkills, [service.id]: value })
+              <div key={service.id} className="flex items-center space-x-3 p-2 rounded-lg hover:bg-muted/50">
+                <Checkbox
+                  id={`service-${service.id}`}
+                  checked={editingSkills[service.id] || false}
+                  onCheckedChange={(checked) =>
+                    setEditingSkills({ ...editingSkills, [service.id]: !!checked })
                   }
+                />
+                <label
+                  htmlFor={`service-${service.id}`}
+                  className="flex-1 cursor-pointer"
                 >
-                  <SelectTrigger className="w-36">
-                    <SelectValue placeholder="Nicht zugewiesen" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nicht zugewiesen</SelectItem>
-                    <SelectItem value="beginner">Anfänger</SelectItem>
-                    <SelectItem value="standard">Standard</SelectItem>
-                    <SelectItem value="expert">Experte</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <span className="font-medium">{service.name}</span>
+                  <span className="text-sm text-muted-foreground ml-2">
+                    ({service.duration_minutes} Min.)
+                  </span>
+                </label>
               </div>
             ))}
+            {services.length === 0 && (
+              <p className="text-center text-muted-foreground py-4">
+                Keine Leistungen vorhanden. Fügen Sie zuerst Leistungen unter Einstellungen hinzu.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSkillsDialogOpen(false)}>
@@ -900,6 +1037,116 @@ export function AdminTeamView({
             </Button>
             <Button onClick={handleSaveAbsence} disabled={isSaving}>
               {isSaving ? 'Speichern...' : 'Speichern'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Staff Dialog */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Neuen Mitarbeiter hinzufügen</DialogTitle>
+            <DialogDescription>
+              Erfassen Sie die Daten des neuen Mitarbeiters
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="staffName">Name *</Label>
+              <Input
+                id="staffName"
+                value={newStaff.display_name}
+                onChange={(e) =>
+                  setNewStaff({ ...newStaff, display_name: e.target.value })
+                }
+                placeholder="Vor- und Nachname"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="staffEmail">E-Mail</Label>
+              <Input
+                id="staffEmail"
+                type="email"
+                value={newStaff.email}
+                onChange={(e) =>
+                  setNewStaff({ ...newStaff, email: e.target.value })
+                }
+                placeholder="email@beispiel.ch"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="staffPhone">Telefon</Label>
+              <Input
+                id="staffPhone"
+                type="tel"
+                value={newStaff.phone}
+                onChange={(e) =>
+                  setNewStaff({ ...newStaff, phone: e.target.value })
+                }
+                placeholder="+41 79 123 45 67"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="staffRole">Rolle</Label>
+                <Select
+                  value={newStaff.role}
+                  onValueChange={(value) =>
+                    setNewStaff({ ...newStaff, role: value })
+                  }
+                >
+                  <SelectTrigger id="staffRole">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="staff">Mitarbeiter</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="admin">Administrator</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="staffEmployment">Anstellung</Label>
+                <Select
+                  value={newStaff.employment_type}
+                  onValueChange={(value) =>
+                    setNewStaff({ ...newStaff, employment_type: value })
+                  }
+                >
+                  <SelectTrigger id="staffEmployment">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full_time">Vollzeit</SelectItem>
+                    <SelectItem value="part_time">Teilzeit</SelectItem>
+                    <SelectItem value="contractor">Freelancer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="staffColor">Farbe (für Kalender)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="staffColor"
+                  type="color"
+                  value={newStaff.color}
+                  onChange={(e) =>
+                    setNewStaff({ ...newStaff, color: e.target.value })
+                  }
+                  className="w-16 h-10 p-1 cursor-pointer"
+                />
+                <span className="text-sm text-muted-foreground">{newStaff.color}</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleAddStaff} disabled={isSaving}>
+              {isSaving ? 'Speichern...' : 'Hinzufügen'}
             </Button>
           </DialogFooter>
         </DialogContent>

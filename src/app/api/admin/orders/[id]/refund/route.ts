@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-11-17.clover',
-});
+// Lazy initialization to avoid build-time errors
+function getStripe(): Stripe {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error('STRIPE_SECRET_KEY is not configured');
+  }
+  return new Stripe(secretKey, {
+    apiVersion: '2025-11-17.clover',
+  });
+}
 
 // ============================================
 // POST - Process Refund
@@ -27,11 +34,12 @@ export async function POST(
       return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
     }
 
-    // Check admin role
+    // Check admin role (only active staff)
     const { data: staffMember } = await supabase
       .from('staff')
       .select('id, role, salon_id')
-      .eq('user_id', user.id)
+      .eq('profile_id', user.id)
+      .eq('is_active', true)
       .single();
 
     if (!staffMember || !['admin', 'hq'].includes(staffMember.role)) {
@@ -100,6 +108,7 @@ export async function POST(
     // Process refund via Stripe
     let refund: Stripe.Refund;
     try {
+      const stripe = getStripe();
       refund = await stripe.refunds.create({
         payment_intent: order.payment_intent_id,
         amount: amountCents,

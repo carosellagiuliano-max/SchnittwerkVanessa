@@ -60,13 +60,13 @@ CREATE POLICY "Staff can view payment events"
   USING (
     order_id IN (
       SELECT id FROM orders WHERE salon_id IN (
-        SELECT salon_id FROM staff WHERE user_id = auth.uid()
+        SELECT salon_id FROM staff WHERE profile_id = auth.uid()
       )
     )
     OR
     payment_id IN (
       SELECT id FROM payments WHERE salon_id IN (
-        SELECT salon_id FROM staff WHERE user_id = auth.uid()
+        SELECT salon_id FROM staff WHERE profile_id = auth.uid()
       )
     )
   );

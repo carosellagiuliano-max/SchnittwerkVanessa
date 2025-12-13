@@ -257,7 +257,7 @@ CREATE OR REPLACE VIEW v_feedback_summary AS
 SELECT
   cf.salon_id,
   cf.staff_id,
-  st.first_name || ' ' || st.last_name as staff_name,
+  st.display_name as staff_name,
   COUNT(*) as total_reviews,
   ROUND(AVG(cf.rating), 2) as average_rating,
   COUNT(*) FILTER (WHERE cf.rating = 5) as five_star,
@@ -271,7 +271,7 @@ SELECT
 FROM customer_feedback cf
 LEFT JOIN staff st ON cf.staff_id = st.id
 WHERE cf.status = 'approved'
-GROUP BY cf.salon_id, cf.staff_id, st.first_name, st.last_name;
+GROUP BY cf.salon_id, cf.staff_id, st.display_name;
 
 COMMENT ON VIEW v_feedback_summary IS 'Customer feedback summary by salon and staff';
 
@@ -281,7 +281,7 @@ SELECT
   cf.*,
   c.first_name || ' ' || c.last_name as customer_name,
   s.name as service_name,
-  st.first_name || ' ' || st.last_name as staff_name
+  st.display_name as staff_name
 FROM customer_feedback cf
 JOIN customers c ON cf.customer_id = c.id
 LEFT JOIN services s ON cf.service_id = s.id
@@ -407,7 +407,7 @@ ON marketing_logs FOR SELECT
 TO authenticated
 USING (
   salon_id IN (
-    SELECT salon_id FROM staff WHERE user_id = auth.uid()
+    SELECT salon_id FROM staff WHERE profile_id = auth.uid()
   )
 );
 
@@ -418,9 +418,10 @@ TO authenticated
 USING (
   salon_id IS NULL OR
   salon_id IN (
-    SELECT salon_id FROM staff
-    WHERE user_id = auth.uid()
-    AND role IN ('admin', 'manager')
+    SELECT s.salon_id FROM staff s
+    JOIN user_roles ur ON ur.profile_id = s.profile_id AND ur.salon_id = s.salon_id
+    WHERE s.profile_id = auth.uid()
+    AND ur.role_name IN ('admin', 'manager')
   )
 );
 
@@ -430,7 +431,7 @@ ON customer_feedback FOR ALL
 TO authenticated
 USING (
   customer_id IN (
-    SELECT id FROM customers WHERE user_id = auth.uid()
+    SELECT id FROM customers WHERE profile_id = auth.uid()
   )
 );
 
@@ -440,7 +441,7 @@ ON customer_feedback FOR SELECT
 TO authenticated
 USING (
   salon_id IN (
-    SELECT salon_id FROM staff WHERE user_id = auth.uid()
+    SELECT salon_id FROM staff WHERE profile_id = auth.uid()
   )
 );
 
@@ -450,9 +451,10 @@ ON customer_feedback FOR UPDATE
 TO authenticated
 USING (
   salon_id IN (
-    SELECT salon_id FROM staff
-    WHERE user_id = auth.uid()
-    AND role IN ('admin', 'manager')
+    SELECT s.salon_id FROM staff s
+    JOIN user_roles ur ON ur.profile_id = s.profile_id AND ur.salon_id = s.salon_id
+    WHERE s.profile_id = auth.uid()
+    AND ur.role_name IN ('admin', 'manager')
   )
 );
 

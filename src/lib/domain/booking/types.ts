@@ -84,9 +84,10 @@ export interface StaffAbsence {
 
 /**
  * Blocked time slot
+ * staffId can be null for salon-wide blocks that apply to all staff
  */
 export interface BlockedTime {
-  staffId: string;
+  staffId: string | null;
   startsAt: Date;
   endsAt: Date;
   reason?: string;

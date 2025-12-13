@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { createServerClient } from '@/lib/supabase/server';
-import { AdminCalendarView } from '@/components/admin/admin-calendar-view';
+import { AdminFullCalendar } from '@/components/admin/admin-fullcalendar';
 
 // ============================================
 // METADATA
@@ -20,7 +20,7 @@ async function getCalendarData() {
   // Get all staff members
   const { data: staffData } = await supabase
     .from('staff')
-    .select('id, display_name, color, is_active')
+    .select('id, display_name, color, is_active, salon_id')
     .eq('is_active', true)
     .order('display_name');
 
@@ -32,8 +32,20 @@ async function getCalendarData() {
     .order('name');
 
   return {
-    staff: staffData || [],
-    services: servicesData || [],
+    staff: (staffData || []) as Array<{
+      id: string;
+      display_name: string;
+      color: string | null;
+      is_active: boolean;
+      salon_id: string;
+    }>,
+    services: (servicesData || []) as Array<{
+      id: string;
+      name: string;
+      duration_minutes: number;
+      price_cents: number;
+      is_active: boolean;
+    }>,
   };
 }
 
@@ -44,5 +56,5 @@ async function getCalendarData() {
 export default async function AdminCalendarPage() {
   const { staff, services } = await getCalendarData();
 
-  return <AdminCalendarView staff={staff} services={services} />;
+  return <AdminFullCalendar staff={staff} services={services} />;
 }

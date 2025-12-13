@@ -555,3 +555,31 @@ BEGIN
   RETURN deleted_count;
 END;
 $$ LANGUAGE plpgsql;
+
+-- ============================================
+-- VIEW: Active customers with computed fields
+-- (Moved from 00003 due to appointments dependency)
+-- ============================================
+CREATE VIEW v_active_customers AS
+SELECT
+  c.*,
+  c.first_name || ' ' || c.last_name AS full_name,
+  p.email,
+  p.phone AS profile_phone,
+  (
+    SELECT COUNT(*)
+    FROM appointments a
+    WHERE a.customer_id = c.id
+    AND a.status = 'completed'
+  ) AS total_appointments,
+  (
+    SELECT MAX(a.start_time)
+    FROM appointments a
+    WHERE a.customer_id = c.id
+    AND a.status = 'completed'
+  ) AS last_appointment_date
+FROM customers c
+JOIN profiles p ON c.profile_id = p.id
+WHERE c.is_active = true;
+
+COMMENT ON VIEW v_active_customers IS 'Active customers with computed statistics';

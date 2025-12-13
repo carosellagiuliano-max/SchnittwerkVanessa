@@ -4,6 +4,8 @@ import { Toaster } from '@/components/ui/sonner';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { LocalBusinessJsonLd } from '@/components/seo/json-ld';
+import { CartProvider } from '@/contexts/cart-context';
+import { CartDrawer } from '@/components/shop/cart-drawer';
 import { getSalon, getOpeningHours } from '@/lib/actions';
 import './globals.css';
 
@@ -112,8 +114,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#1a1a1a' },
+    { media: '(prefers-color-scheme: light)', color: '#faf9f7' },
+    { media: '(prefers-color-scheme: dark)', color: '#1c1917' },
   ],
 };
 
@@ -139,32 +141,45 @@ export default async function RootLayout({
         <LocalBusinessJsonLd salon={salon} openingHours={openingHours} />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased min-h-screen bg-gradient-beauty`}
       >
-        {/* Header */}
-        <Header />
+        <CartProvider>
+          {/* Decorative background elements */}
+          <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+            <div className="absolute -top-1/2 -right-1/4 w-[800px] h-[800px] rounded-full bg-gradient-radial from-primary/5 via-transparent to-transparent opacity-60 blur-3xl" />
+            <div className="absolute -bottom-1/4 -left-1/4 w-[600px] h-[600px] rounded-full bg-gradient-radial from-rose/5 via-transparent to-transparent opacity-40 blur-3xl" />
+          </div>
 
-        {/* Main Content - with top padding for fixed header */}
-        <main className="min-h-screen pt-16 lg:pt-20">{children}</main>
+          {/* Header */}
+          <Header />
 
-        {/* Footer */}
-        <Footer />
+          {/* Main Content - with top padding for fixed header */}
+          <main className="min-h-screen pt-16 lg:pt-20 animate-fade-in">
+            {children}
+          </main>
 
-        {/* Toast Notifications */}
-        <Toaster
-          position="bottom-right"
-          toastOptions={{
-            classNames: {
-              toast: 'bg-card border-border',
-              title: 'text-foreground',
-              description: 'text-muted-foreground',
-              success: 'border-l-4 border-l-green-500',
-              error: 'border-l-4 border-l-destructive',
-              warning: 'border-l-4 border-l-yellow-500',
-              info: 'border-l-4 border-l-primary',
-            },
-          }}
-        />
+          {/* Footer */}
+          <Footer />
+
+          {/* Cart Drawer */}
+          <CartDrawer />
+
+          {/* Toast Notifications */}
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
+              classNames: {
+                toast: 'bg-card/95 backdrop-blur-xl border-border/50 shadow-elegant',
+                title: 'text-foreground font-medium',
+                description: 'text-muted-foreground',
+                success: 'border-l-4 border-l-emerald-500',
+                error: 'border-l-4 border-l-destructive',
+                warning: 'border-l-4 border-l-amber-500',
+                info: 'border-l-4 border-l-primary',
+              },
+            }}
+          />
+        </CartProvider>
       </body>
     </html>
   );

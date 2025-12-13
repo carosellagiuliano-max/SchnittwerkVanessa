@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ImageIcon,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,6 +50,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { createBrowserClient } from '@/lib/supabase/client';
+import { toast } from 'sonner';
 
 // ============================================
 // TYPES
@@ -69,15 +75,33 @@ interface Product {
   created_at: string;
 }
 
+interface Category {
+  id: string;
+  name: string;
+}
+
 interface AdminProductListProps {
   products: Product[];
   total: number;
   page: number;
   limit: number;
-  categories: string[];
+  categories: Category[];
   initialSearch: string;
   initialCategory: string;
 }
+
+interface ProductForm {
+  name: string;
+  description: string;
+  sku: string;
+  price: string;
+  compareAtPrice: string;
+  stockQuantity: string;
+  category: string;
+  isActive: boolean;
+}
+
+const DEFAULT_SALON_ID = '550e8400-e29b-41d4-a716-446655440001';
 
 // ============================================
 // HELPERS
@@ -110,7 +134,127 @@ export function AdminProductList({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
+  // Create/Edit product state
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productForm, setProductForm] = useState<ProductForm>({
+    name: '',
+    description: '',
+    sku: '',
+    price: '',
+    compareAtPrice: '',
+    stockQuantity: '0',
+    category: '',
+    isActive: true,
+  });
+
   const totalPages = Math.ceil(total / limit);
+
+  // Open view dialog
+  const handleViewProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setViewDialogOpen(true);
+  };
+
+  // Open edit dialog
+  const handleEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setProductForm({
+      name: product.name,
+      description: product.description || '',
+      sku: product.sku || '',
+      price: (product.price_cents / 100).toFixed(2),
+      compareAtPrice: product.compare_at_price_cents
+        ? (product.compare_at_price_cents / 100).toFixed(2)
+        : '',
+      stockQuantity: product.stock_quantity.toString(),
+      category: product.category || '',
+      isActive: product.is_active,
+    });
+    setEditDialogOpen(true);
+  };
+
+  // Generate slug from name
+  const generateSlug = (name: string) => {
+    return name
+      .toLowerCase()
+      .replace(/[äÄ]/g, 'ae')
+      .replace(/[öÖ]/g, 'oe')
+      .replace(/[üÜ]/g, 'ue')
+      .replace(/[ß]/g, 'ss')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+  };
+
+  // Reset form
+  const resetProductForm = () => {
+    setProductForm({
+      name: '',
+      description: '',
+      sku: '',
+      price: '',
+      compareAtPrice: '',
+      stockQuantity: '0',
+      category: '',
+      isActive: true,
+    });
+  };
+
+  // Create product handler
+  const handleCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!productForm.name.trim()) {
+      toast.error('Bitte geben Sie einen Produktnamen ein');
+      return;
+    }
+
+    if (!productForm.price || parseFloat(productForm.price) <= 0) {
+      toast.error('Bitte geben Sie einen gültigen Preis ein');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const supabase = createBrowserClient();
+      const priceCents = Math.round(parseFloat(productForm.price) * 100);
+      const compareAtPriceCents = productForm.compareAtPrice
+        ? Math.round(parseFloat(productForm.compareAtPrice) * 100)
+        : null;
+      const stockQuantity = parseInt(productForm.stockQuantity) || 0;
+      const slug = generateSlug(productForm.name);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.from('products') as any).insert({
+        salon_id: DEFAULT_SALON_ID,
+        name: productForm.name.trim(),
+        slug: slug + '-' + Date.now(), // Add timestamp to ensure uniqueness
+        description: productForm.description.trim() || null,
+        sku: productForm.sku.trim() || null,
+        price_cents: priceCents,
+        compare_at_price_cents: compareAtPriceCents,
+        stock_quantity: stockQuantity,
+        is_active: productForm.isActive,
+      });
+
+      if (error) throw error;
+
+      toast.success('Produkt erfolgreich erstellt');
+      setCreateDialogOpen(false);
+      resetProductForm();
+      router.refresh();
+    } catch (error) {
+      console.error('Error creating product:', error);
+      toast.error('Fehler beim Erstellen des Produkts');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,10 +293,81 @@ export function AdminProductList({
 
   const handleDeleteConfirm = async () => {
     if (!selectedProduct) return;
-    // TODO: Implement delete functionality
-    console.log('Delete product:', selectedProduct.id);
-    setDeleteDialogOpen(false);
-    setSelectedProduct(null);
+
+    setIsDeleting(true);
+    try {
+      const supabase = createBrowserClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.from('products') as any)
+        .delete()
+        .eq('id', selectedProduct.id);
+
+      if (error) throw error;
+
+      toast.success('Produkt erfolgreich gelöscht');
+      setDeleteDialogOpen(false);
+      setSelectedProduct(null);
+      router.refresh();
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      toast.error('Fehler beim Löschen des Produkts');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Update product handler
+  const handleUpdateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editingProduct) return;
+
+    if (!productForm.name.trim()) {
+      toast.error('Bitte geben Sie einen Produktnamen ein');
+      return;
+    }
+
+    if (!productForm.price || parseFloat(productForm.price) <= 0) {
+      toast.error('Bitte geben Sie einen gültigen Preis ein');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const supabase = createBrowserClient();
+      const priceCents = Math.round(parseFloat(productForm.price) * 100);
+      const compareAtPriceCents = productForm.compareAtPrice
+        ? Math.round(parseFloat(productForm.compareAtPrice) * 100)
+        : null;
+      const stockQuantity = parseInt(productForm.stockQuantity) || 0;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.from('products') as any)
+        .update({
+          name: productForm.name.trim(),
+          description: productForm.description.trim() || null,
+          sku: productForm.sku.trim() || null,
+          price_cents: priceCents,
+          compare_at_price_cents: compareAtPriceCents,
+          stock_quantity: stockQuantity,
+          is_active: productForm.isActive,
+        })
+        .eq('id', editingProduct.id);
+
+      if (error) throw error;
+
+      toast.success('Produkt erfolgreich aktualisiert');
+      setEditDialogOpen(false);
+      setEditingProduct(null);
+      resetProductForm();
+      router.refresh();
+    } catch (error) {
+      console.error('Error updating product:', error);
+      toast.error('Fehler beim Aktualisieren des Produkts');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -188,14 +403,14 @@ export function AdminProductList({
               <SelectContent>
                 <SelectItem value="all">Alle Kategorien</SelectItem>
                 {categories.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           )}
-          <Button>
+          <Button onClick={() => setCreateDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Neues Produkt
           </Button>
@@ -304,11 +519,11 @@ export function AdminProductList({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleViewProduct(product)}>
                             <Eye className="h-4 w-4 mr-2" />
                             Anzeigen
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEditProduct(product)}>
                             <Edit className="h-4 w-4 mr-2" />
                             Bearbeiten
                           </DropdownMenuItem>
@@ -369,13 +584,425 @@ export function AdminProductList({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={isDeleting}>
               Abbrechen
             </Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm}>
-              Löschen
+            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isDeleting}>
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Lösche...
+                </>
+              ) : (
+                'Löschen'
+              )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Product Dialog */}
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle>Produktdetails</DialogTitle>
+          </DialogHeader>
+          {selectedProduct && (
+            <div className="space-y-4">
+              {/* Product Image */}
+              <div className="flex justify-center">
+                <div className="h-32 w-32 rounded-lg overflow-hidden bg-muted flex items-center justify-center">
+                  {selectedProduct.image_url ? (
+                    <Image
+                      src={selectedProduct.image_url}
+                      alt={selectedProduct.name}
+                      width={128}
+                      height={128}
+                      className="object-cover"
+                    />
+                  ) : (
+                    <ImageIcon className="h-12 w-12 text-muted-foreground" />
+                  )}
+                </div>
+              </div>
+
+              {/* Product Info */}
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm text-muted-foreground">Name</p>
+                  <p className="font-medium">{selectedProduct.name}</p>
+                </div>
+
+                {selectedProduct.description && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Beschreibung</p>
+                    <p>{selectedProduct.description}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Preis</p>
+                    <p className="font-medium">{formatCurrency(selectedProduct.price_cents)}</p>
+                  </div>
+                  {selectedProduct.compare_at_price_cents && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Streichpreis</p>
+                      <p className="line-through text-muted-foreground">
+                        {formatCurrency(selectedProduct.compare_at_price_cents)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Artikelnummer</p>
+                    <p>{selectedProduct.sku || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Lagerbestand</p>
+                    <p>{selectedProduct.stock_quantity}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Kategorie</p>
+                    <p>{selectedProduct.category || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Status</p>
+                    <Badge variant={selectedProduct.is_active ? 'default' : 'outline'}>
+                      {selectedProduct.is_active ? 'Aktiv' : 'Inaktiv'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
+                  Schliessen
+                </Button>
+                <Button onClick={() => {
+                  setViewDialogOpen(false);
+                  handleEditProduct(selectedProduct);
+                }}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Bearbeiten
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Product Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={(open) => {
+        setEditDialogOpen(open);
+        if (!open) {
+          setEditingProduct(null);
+          resetProductForm();
+        }
+      }}>
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle>Produkt bearbeiten</DialogTitle>
+            <DialogDescription>
+              Aktualisieren Sie die Produktinformationen.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleUpdateProduct}>
+            <div className="space-y-4 py-4">
+              {/* Name */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Produktname *</Label>
+                <Input
+                  id="edit-name"
+                  value={productForm.name}
+                  onChange={(e) =>
+                    setProductForm((prev) => ({ ...prev, name: e.target.value }))
+                  }
+                  placeholder="z.B. Shampoo Professional"
+                />
+              </div>
+
+              {/* Description */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Beschreibung</Label>
+                <Textarea
+                  id="edit-description"
+                  value={productForm.description}
+                  onChange={(e) =>
+                    setProductForm((prev) => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
+                  placeholder="Produktbeschreibung..."
+                  rows={3}
+                />
+              </div>
+
+              {/* Price and Compare At Price */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-price">Preis (CHF) *</Label>
+                  <Input
+                    id="edit-price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={productForm.price}
+                    onChange={(e) =>
+                      setProductForm((prev) => ({ ...prev, price: e.target.value }))
+                    }
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-compareAtPrice">Streichpreis (CHF)</Label>
+                  <Input
+                    id="edit-compareAtPrice"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={productForm.compareAtPrice}
+                    onChange={(e) =>
+                      setProductForm((prev) => ({
+                        ...prev,
+                        compareAtPrice: e.target.value,
+                      }))
+                    }
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              {/* SKU and Stock */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-sku">Artikelnummer (SKU)</Label>
+                  <Input
+                    id="edit-sku"
+                    value={productForm.sku}
+                    onChange={(e) =>
+                      setProductForm((prev) => ({ ...prev, sku: e.target.value }))
+                    }
+                    placeholder="z.B. SHP-001"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-stockQuantity">Lagerbestand</Label>
+                  <Input
+                    id="edit-stockQuantity"
+                    type="number"
+                    min="0"
+                    value={productForm.stockQuantity}
+                    onChange={(e) =>
+                      setProductForm((prev) => ({
+                        ...prev,
+                        stockQuantity: e.target.value,
+                      }))
+                    }
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              {/* Active Switch */}
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label>Produkt aktiv</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Aktive Produkte sind im Shop sichtbar
+                  </p>
+                </div>
+                <Switch
+                  checked={productForm.isActive}
+                  onCheckedChange={(checked) =>
+                    setProductForm((prev) => ({ ...prev, isActive: checked }))
+                  }
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setEditDialogOpen(false);
+                  setEditingProduct(null);
+                  resetProductForm();
+                }}
+              >
+                Abbrechen
+              </Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Speichere...
+                  </>
+                ) : (
+                  'Speichern'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Product Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle>Neues Produkt erstellen</DialogTitle>
+            <DialogDescription>
+              Fügen Sie ein neues Produkt zu Ihrem Sortiment hinzu.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleCreateProduct}>
+            <div className="space-y-4 py-4">
+              {/* Name */}
+              <div className="space-y-2">
+                <Label htmlFor="name">Produktname *</Label>
+                <Input
+                  id="name"
+                  value={productForm.name}
+                  onChange={(e) =>
+                    setProductForm((prev) => ({ ...prev, name: e.target.value }))
+                  }
+                  placeholder="z.B. Shampoo Professional"
+                />
+              </div>
+
+              {/* Description */}
+              <div className="space-y-2">
+                <Label htmlFor="description">Beschreibung</Label>
+                <Textarea
+                  id="description"
+                  value={productForm.description}
+                  onChange={(e) =>
+                    setProductForm((prev) => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
+                  placeholder="Produktbeschreibung..."
+                  rows={3}
+                />
+              </div>
+
+              {/* Price and Compare At Price */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="price">Preis (CHF) *</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={productForm.price}
+                    onChange={(e) =>
+                      setProductForm((prev) => ({ ...prev, price: e.target.value }))
+                    }
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="compareAtPrice">Streichpreis (CHF)</Label>
+                  <Input
+                    id="compareAtPrice"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={productForm.compareAtPrice}
+                    onChange={(e) =>
+                      setProductForm((prev) => ({
+                        ...prev,
+                        compareAtPrice: e.target.value,
+                      }))
+                    }
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              {/* SKU and Stock */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="sku">Artikelnummer (SKU)</Label>
+                  <Input
+                    id="sku"
+                    value={productForm.sku}
+                    onChange={(e) =>
+                      setProductForm((prev) => ({ ...prev, sku: e.target.value }))
+                    }
+                    placeholder="z.B. SHP-001"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="stockQuantity">Lagerbestand</Label>
+                  <Input
+                    id="stockQuantity"
+                    type="number"
+                    min="0"
+                    value={productForm.stockQuantity}
+                    onChange={(e) =>
+                      setProductForm((prev) => ({
+                        ...prev,
+                        stockQuantity: e.target.value,
+                      }))
+                    }
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              {/* Active Switch */}
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label>Produkt aktiv</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Aktive Produkte sind im Shop sichtbar
+                  </p>
+                </div>
+                <Switch
+                  checked={productForm.isActive}
+                  onCheckedChange={(checked) =>
+                    setProductForm((prev) => ({ ...prev, isActive: checked }))
+                  }
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setCreateDialogOpen(false);
+                  resetProductForm();
+                }}
+              >
+                Abbrechen
+              </Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Erstelle...
+                  </>
+                ) : (
+                  'Produkt erstellen'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

@@ -102,19 +102,21 @@ export default async function KontaktPage() {
             <Card className="border-border/50">
               <CardContent className="p-6">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <a
+                    href="tel:0718019265"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
+                    aria-label="Telefon: 071 801 92 65"
+                  >
                     <Phone className="h-5 w-5 text-primary" />
-                  </div>
+                  </a>
                   <div>
                     <h3 className="font-semibold mb-1">Telefon</h3>
-                    {salon?.phone && (
-                      <a
-                        href={`tel:${salon.phone.replace(/\s/g, '')}`}
-                        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {salon.phone}
-                      </a>
-                    )}
+                    <a
+                      href="tel:0718019265"
+                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      071 801 92 65
+                    </a>
                   </div>
                 </div>
               </CardContent>

@@ -1,7 +1,7 @@
 'use server';
 
 import { createServerClient } from '@/lib/db/client';
-import { unstable_cache } from 'next/cache';
+import { unstable_cache, revalidateTag } from 'next/cache';
 
 // ============================================
 // SALON DATA SERVER ACTIONS
@@ -301,4 +301,67 @@ export async function getPublicSalonData(salonId: string = DEFAULT_SALON_ID) {
     services,
     addons,
   };
+}
+
+// ============================================
+// UPDATE OPENING HOURS
+// ============================================
+
+export type UpdateOpeningHoursInput = {
+  dayOfWeek: number;
+  openTime: string;
+  closeTime: string;
+  isOpen: boolean;
+}[];
+
+export type UpdateOpeningHoursResult = {
+  success: boolean;
+  error?: string;
+};
+
+export async function updateOpeningHours(
+  openingHours: UpdateOpeningHoursInput,
+  salonId: string = DEFAULT_SALON_ID
+): Promise<UpdateOpeningHoursResult> {
+  const supabase = createServerClient();
+
+  try {
+    // Update each day's opening hours using upsert
+    for (const hours of openingHours) {
+      const { error } = await supabase
+        .from('opening_hours')
+        .upsert(
+          {
+            salon_id: salonId,
+            day_of_week: hours.dayOfWeek,
+            open_time: hours.openTime,
+            close_time: hours.closeTime,
+            is_open: hours.isOpen,
+          },
+          {
+            onConflict: 'salon_id,day_of_week',
+          }
+        );
+
+      if (error) {
+        console.error('Error updating opening hours:', error);
+        return {
+          success: false,
+          error: `Fehler beim Speichern: ${error.message}`,
+        };
+      }
+    }
+
+    // Revalidate caches
+    revalidateTag('opening-hours');
+    revalidateTag('booking');
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating opening hours:', error);
+    return {
+      success: false,
+      error: 'Ein unerwarteter Fehler ist aufgetreten.',
+    };
+  }
 }

@@ -113,12 +113,16 @@ export function TimeSelection({
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold mb-2">
+      <div className="text-center">
+        <Badge className="mb-3 bg-primary/10 text-primary border-primary/20 hover:bg-primary/10">
+          <Calendar className="w-3 h-3 mr-1" />
+          Schritt 3 von 4
+        </Badge>
+        <h2 className="text-2xl sm:text-3xl font-bold mb-2 bg-gradient-to-r from-primary via-primary/80 to-rose-400 bg-clip-text text-transparent">
           Wählen Sie Ihren Wunschtermin
         </h2>
         <p className="text-muted-foreground">
-          Verfügbare Termine werden grün angezeigt.
+          Verfügbare Termine sind farbig markiert
         </p>
       </div>
 
@@ -155,77 +159,105 @@ export function TimeSelection({
       {!isLoading && !error && (
         <>
           {/* Calendar Navigation */}
-          <div className="flex items-center justify-between">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={goToPreviousWeek}
-              disabled={isBefore(
-                currentWeekStart,
-                startOfWeek(new Date(), { weekStartsOn: 1 })
-              )}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="font-semibold">
-              {format(currentWeekStart, 'MMMM yyyy', { locale: de })}
-            </span>
-            <Button variant="outline" size="icon" onClick={goToNextWeek}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* Week Days */}
-          <div className="grid grid-cols-7 gap-2">
-            {weekDays.map((day) => {
-              const isPast = isBefore(day, startOfDay(new Date()));
-              const isAvailable = hasSlots(day);
-              const isSelected = selectedDate && isSameDay(day, selectedDate);
-
-              return (
-                <button
-                  key={day.toISOString()}
-                  onClick={() => !isPast && isAvailable && setSelectedDate(day)}
-                  disabled={isPast || !isAvailable}
-                  className={cn(
-                    'flex flex-col items-center p-2 sm:p-3 rounded-lg border-2 transition-all',
-                    isSelected && 'border-primary bg-primary/10',
-                    !isSelected && isAvailable && 'border-primary/50 hover:bg-primary/5',
-                    !isSelected && !isAvailable && 'border-muted opacity-50',
-                    isPast && 'opacity-30 cursor-not-allowed'
+          <Card className="card-elegant overflow-hidden">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={goToPreviousWeek}
+                  disabled={isBefore(
+                    currentWeekStart,
+                    startOfWeek(new Date(), { weekStartsOn: 1 })
                   )}
+                  className="hover:bg-primary/10 hover:text-primary"
                 >
-                  <span className="text-xs text-muted-foreground">
-                    {format(day, 'EEE', { locale: de })}
+                  <ChevronLeft className="h-5 w-5" />
+                </Button>
+                <div className="text-center">
+                  <span className="text-lg font-bold text-foreground">
+                    {format(currentWeekStart, 'MMMM', { locale: de })}
                   </span>
-                  <span
-                    className={cn(
-                      'text-lg font-semibold',
-                      isToday(day) && 'text-primary'
-                    )}
-                  >
-                    {format(day, 'd')}
+                  <span className="text-lg font-light text-muted-foreground ml-2">
+                    {format(currentWeekStart, 'yyyy', { locale: de })}
                   </span>
-                  {isAvailable && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={goToNextWeek}
+                  className="hover:bg-primary/10 hover:text-primary"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </Button>
+              </div>
+
+              {/* Week Days */}
+              <div className="grid grid-cols-7 gap-2">
+                {weekDays.map((day) => {
+                  const isPast = isBefore(day, startOfDay(new Date()));
+                  const isAvailable = hasSlots(day);
+                  const isSelected = selectedDate && isSameDay(day, selectedDate);
+
+                  return (
+                    <button
+                      key={day.toISOString()}
+                      onClick={() => !isPast && isAvailable && setSelectedDate(day)}
+                      disabled={isPast || !isAvailable}
+                      className={cn(
+                        'group relative flex flex-col items-center p-2 sm:p-3 rounded-xl transition-all duration-300',
+                        // Selected state - prominent styling
+                        isSelected && 'bg-gradient-to-br from-primary to-primary/80 text-white shadow-lg shadow-primary/30 scale-105',
+                        // Available but not selected - inviting styling
+                        !isSelected && isAvailable && 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/20 border-2 border-emerald-300 dark:border-emerald-700 hover:shadow-md hover:scale-102 hover:border-emerald-400',
+                        // Not available - subtle styling
+                        !isSelected && !isAvailable && 'bg-muted/30 text-muted-foreground border border-muted',
+                        // Past days - very subtle
+                        isPast && 'opacity-40 cursor-not-allowed'
+                      )}
+                    >
+                      <span className={cn(
+                        'text-xs font-medium uppercase tracking-wide',
+                        isSelected ? 'text-white/80' : isAvailable ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'
+                      )}>
+                        {format(day, 'EEE', { locale: de })}
+                      </span>
+                      <span
+                        className={cn(
+                          'text-xl font-bold mt-0.5',
+                          isSelected ? 'text-white' : isToday(day) ? 'text-primary' : isAvailable ? 'text-emerald-700 dark:text-emerald-300' : ''
+                        )}
+                      >
+                        {format(day, 'd')}
+                      </span>
+                      {isAvailable && !isSelected && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-background animate-pulse" />
+                      )}
+                      {isSelected && (
+                        <span className="text-[10px] text-white/90 mt-1 font-medium">Ausgewählt</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Time Slots */}
           {selectedDate && (
-            <div>
-              <h3 className="font-semibold mb-4">
-                {isToday(selectedDate)
-                  ? 'Heute'
-                  : format(selectedDate, 'EEEE, d. MMMM', { locale: de })}
-              </h3>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Clock className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-semibold">
+                  {isToday(selectedDate)
+                    ? 'Verfügbare Zeiten heute'
+                    : `Verfügbare Zeiten am ${format(selectedDate, 'EEEE, d. MMMM', { locale: de })}`}
+                </h3>
+              </div>
 
               {filteredSlots.length > 0 ? (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                  {filteredSlots.map((slot, index) => {
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                  {filteredSlots.map((slot) => {
                     const isSelected =
                       state.selectedSlot?.startsAt.getTime() ===
                       slot.startsAt.getTime();
@@ -235,18 +267,33 @@ export function TimeSelection({
                         key={`${slot.staffId}-${slot.startsAt.toISOString()}`}
                         onClick={() => handleSlotSelect(slot)}
                         className={cn(
-                          'p-3 rounded-lg border-2 text-center transition-all',
+                          'group relative p-3 sm:p-4 rounded-xl text-center transition-all duration-300',
                           isSelected
-                            ? 'border-primary bg-primary text-primary-foreground'
-                            : 'border-border hover:border-primary/50 hover:bg-primary/5'
+                            ? 'bg-gradient-to-br from-primary to-primary/80 text-white shadow-lg shadow-primary/30 scale-105'
+                            : 'bg-white dark:bg-card border-2 border-primary/20 hover:border-primary hover:shadow-md hover:scale-102 hover:bg-primary/5'
                         )}
                       >
-                        <span className="text-sm font-semibold">
+                        <Clock className={cn(
+                          'h-4 w-4 mx-auto mb-1',
+                          isSelected ? 'text-white/80' : 'text-primary'
+                        )} />
+                        <span className={cn(
+                          'text-base sm:text-lg font-bold block',
+                          isSelected ? 'text-white' : 'text-foreground'
+                        )}>
                           {format(slot.startsAt, 'HH:mm')}
                         </span>
                         {!state.selectedStaff && !state.noStaffPreference && (
-                          <span className="block text-xs opacity-70 mt-0.5">
+                          <span className={cn(
+                            'block text-xs mt-1 font-medium',
+                            isSelected ? 'text-white/80' : 'text-primary/70'
+                          )}>
                             {slot.staffName.split(' ')[0]}
+                          </span>
+                        )}
+                        {isSelected && (
+                          <span className="absolute -top-1 -right-1 w-5 h-5 bg-white text-primary rounded-full flex items-center justify-center shadow-md">
+                            ✓
                           </span>
                         )}
                       </button>
@@ -254,11 +301,16 @@ export function TimeSelection({
                   })}
                 </div>
               ) : (
-                <Card className="border-dashed">
-                  <CardContent className="p-6 text-center">
-                    <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-muted-foreground">
+                <Card className="border-dashed border-2 border-muted">
+                  <CardContent className="p-8 text-center">
+                    <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
+                      <Clock className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <p className="text-muted-foreground font-medium">
                       Keine verfügbaren Termine an diesem Tag
+                    </p>
+                    <p className="text-sm text-muted-foreground/70 mt-1">
+                      Bitte wählen Sie einen anderen Tag
                     </p>
                   </CardContent>
                 </Card>
@@ -269,12 +321,22 @@ export function TimeSelection({
       )}
 
       {/* Navigation */}
-      <div className="flex justify-between pt-4 border-t">
-        <Button variant="outline" onClick={goBack}>
+      <div className="flex justify-between pt-6 border-t border-border/50">
+        <Button
+          variant="ghost"
+          onClick={goBack}
+          className="gap-2 hover:bg-muted/50"
+        >
+          <ChevronLeft className="h-4 w-4" />
           Zurück
         </Button>
-        <Button onClick={goNext} disabled={!canProceed}>
+        <Button
+          onClick={goNext}
+          disabled={!canProceed}
+          className="gap-2 btn-glow bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+        >
           Weiter
+          <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
     </div>

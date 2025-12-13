@@ -7,6 +7,66 @@
 -- It creates test data for the SCHNITTWERK salon in St. Gallen.
 
 -- ============================================
+-- 0. CREATE ADMIN USER
+-- ============================================
+
+-- Create admin user in auth.users
+INSERT INTO auth.users (
+  id,
+  instance_id,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  confirmation_token,
+  recovery_token,
+  email_change_token_new,
+  email_change,
+  created_at,
+  updated_at,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  is_super_admin,
+  aud,
+  role
+) VALUES (
+  'a50e8400-e29b-41d4-a716-446655440001',
+  '00000000-0000-0000-0000-000000000000',
+  'admin@schnittwerk.ch',
+  crypt('admin123', gen_salt('bf')),
+  NOW(),
+  '',
+  '',
+  '',
+  '',
+  NOW(),
+  NOW(),
+  '{"provider": "email", "providers": ["email"]}',
+  '{"first_name": "Admin", "last_name": "Schnittwerk"}',
+  false,
+  'authenticated',
+  'authenticated'
+);
+
+-- Create identity for the user
+INSERT INTO auth.identities (
+  id,
+  user_id,
+  provider_id,
+  identity_data,
+  provider,
+  created_at,
+  updated_at
+) VALUES (
+  'a50e8400-e29b-41d4-a716-446655440001',
+  'a50e8400-e29b-41d4-a716-446655440001',
+  'admin@schnittwerk.ch',
+  '{"sub": "a50e8400-e29b-41d4-a716-446655440001", "email": "admin@schnittwerk.ch"}',
+  'email',
+  NOW(),
+  NOW()
+);
+
+-- ============================================
 -- 1. CREATE SALON
 -- ============================================
 
@@ -39,7 +99,7 @@ INSERT INTO opening_hours (salon_id, day_of_week, open_time, close_time, is_open
   ('550e8400-e29b-41d4-a716-446655440001', 3, '08:30', '20:00', true),  -- Thursday (late)
   ('550e8400-e29b-41d4-a716-446655440001', 4, '08:30', '18:00', true),  -- Friday
   ('550e8400-e29b-41d4-a716-446655440001', 5, '09:00', '14:00', true),  -- Saturday
-  ('550e8400-e29b-41d4-a716-446655440001', 6, NULL, NULL, false);       -- Sunday (closed)
+  ('550e8400-e29b-41d4-a716-446655440001', 6, '00:00', '23:59', false); -- Sunday (closed)
 
 -- ============================================
 -- 3. CREATE SERVICE CATEGORIES
@@ -184,87 +244,80 @@ INSERT INTO data_retention_policies (salon_id, data_type, retention_days, action
 -- 12. CREATE STAFF MEMBERS (without auth link for demo)
 -- ============================================
 
-INSERT INTO staff (id, salon_id, profile_id, display_name, job_title, bio, specialties, is_bookable, is_active, sort_order) VALUES
-  ('b50e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440001', NULL, 'Vanessa Carosella', 'Inhaberin & Master Stylistin', 'Mit über 15 Jahren Erfahrung und einer Leidenschaft für innovative Farbtechniken ist Vanessa das Herz von SCHNITTWERK. Sie ist spezialisiert auf Balayage und Brautfrisuren.', ARRAY['Balayage', 'Colorationen', 'Brautfrisuren'], true, true, 1),
-  ('b50e8400-e29b-41d4-a716-446655440002', '550e8400-e29b-41d4-a716-446655440001', NULL, 'Laura Meier', 'Senior Stylistin', 'Laura bringt kreative Energie ins Team. Ihre Stärke liegt in modernen Schnitttechniken und natürlichen Colorationen.', ARRAY['Haarschnitte', 'Strähnchen', 'Styling'], true, true, 2),
-  ('b50e8400-e29b-41d4-a716-446655440003', '550e8400-e29b-41d4-a716-446655440001', NULL, 'Marco Bianchi', 'Stylist', 'Marco ist unser Spezialist für Herrenfrisuren und Bartpflege. Mit präzisen Schnitten und einem Auge für Details sorgt er für den perfekten Look.', ARRAY['Herrenschnitte', 'Bartpflege', 'Fade Cuts'], true, true, 3),
-  ('b50e8400-e29b-41d4-a716-446655440004', '550e8400-e29b-41d4-a716-446655440001', NULL, 'Sophie Klein', 'Junior Stylistin', 'Als neuestes Teammitglied bringt Sophie frische Ideen und Enthusiasmus mit. Sie lernt schnell und hat ein besonderes Gespür für Kundenwünsche.', ARRAY['Damenschnitte', 'Föhntechniken', 'Pflege'], true, true, 4);
+INSERT INTO staff (id, salon_id, profile_id, display_name, job_title, bio, specialties, is_bookable, is_active, sort_order, email, phone, role, color, employment_type) VALUES
+  ('b50e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440001', NULL, 'Vanessa Carosella', 'Inhaberin & Master Stylistin', 'Mit über 15 Jahren Erfahrung und einer Leidenschaft für innovative Farbtechniken ist Vanessa das Herz von SCHNITTWERK. Sie ist spezialisiert auf Balayage und Brautfrisuren.', ARRAY['Balayage', 'Colorationen', 'Brautfrisuren'], true, true, 1, 'vanessa@schnittwerk.ch', '+41 71 234 56 78', 'admin', '#e11d48', 'full_time'),
+  ('b50e8400-e29b-41d4-a716-446655440002', '550e8400-e29b-41d4-a716-446655440001', NULL, 'Laura Meier', 'Senior Stylistin', 'Laura bringt kreative Energie ins Team. Ihre Stärke liegt in modernen Schnitttechniken und natürlichen Colorationen.', ARRAY['Haarschnitte', 'Strähnchen', 'Styling'], true, true, 2, 'laura@schnittwerk.ch', '+41 71 234 56 79', 'staff', '#3b82f6', 'full_time'),
+  ('b50e8400-e29b-41d4-a716-446655440003', '550e8400-e29b-41d4-a716-446655440001', NULL, 'Marco Bianchi', 'Stylist', 'Marco ist unser Spezialist für Herrenfrisuren und Bartpflege. Mit präzisen Schnitten und einem Auge für Details sorgt er für den perfekten Look.', ARRAY['Herrenschnitte', 'Bartpflege', 'Fade Cuts'], true, true, 3, 'marco@schnittwerk.ch', '+41 71 234 56 80', 'staff', '#10b981', 'full_time'),
+  ('b50e8400-e29b-41d4-a716-446655440004', '550e8400-e29b-41d4-a716-446655440001', NULL, 'Sophie Klein', 'Junior Stylistin', 'Als neuestes Teammitglied bringt Sophie frische Ideen und Enthusiasmus mit. Sie lernt schnell und hat ein besonderes Gespür für Kundenwünsche.', ARRAY['Damenschnitte', 'Föhntechniken', 'Pflege'], true, true, 4, 'sophie@schnittwerk.ch', '+41 71 234 56 81', 'staff', '#f59e0b', 'part_time');
 
 -- ============================================
 -- 13. CREATE STAFF WORKING HOURS
 -- ============================================
 
 -- Vanessa: Mo-Fr 08:30-18:00, Sa 09:00-14:00
-INSERT INTO staff_working_hours (salon_id, staff_id, day_of_week, start_time, end_time) VALUES
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440001', 0, '08:30', '18:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440001', 1, '08:30', '18:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440001', 2, '08:30', '18:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440001', 3, '08:30', '20:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440001', 4, '08:30', '18:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440001', 5, '09:00', '14:00');
+INSERT INTO staff_working_hours (staff_id, day_of_week, start_time, end_time) VALUES
+  ('b50e8400-e29b-41d4-a716-446655440001', 0, '08:30', '18:00'),
+  ('b50e8400-e29b-41d4-a716-446655440001', 1, '08:30', '18:00'),
+  ('b50e8400-e29b-41d4-a716-446655440001', 2, '08:30', '18:00'),
+  ('b50e8400-e29b-41d4-a716-446655440001', 3, '08:30', '20:00'),
+  ('b50e8400-e29b-41d4-a716-446655440001', 4, '08:30', '18:00'),
+  ('b50e8400-e29b-41d4-a716-446655440001', 5, '09:00', '14:00');
 
 -- Laura: Di-Sa
-INSERT INTO staff_working_hours (salon_id, staff_id, day_of_week, start_time, end_time) VALUES
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440002', 1, '08:30', '18:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440002', 2, '08:30', '18:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440002', 3, '08:30', '20:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440002', 4, '08:30', '18:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440002', 5, '09:00', '14:00');
+INSERT INTO staff_working_hours (staff_id, day_of_week, start_time, end_time) VALUES
+  ('b50e8400-e29b-41d4-a716-446655440002', 1, '08:30', '18:00'),
+  ('b50e8400-e29b-41d4-a716-446655440002', 2, '08:30', '18:00'),
+  ('b50e8400-e29b-41d4-a716-446655440002', 3, '08:30', '20:00'),
+  ('b50e8400-e29b-41d4-a716-446655440002', 4, '08:30', '18:00'),
+  ('b50e8400-e29b-41d4-a716-446655440002', 5, '09:00', '14:00');
 
 -- Marco: Mo, Mi-Fr
-INSERT INTO staff_working_hours (salon_id, staff_id, day_of_week, start_time, end_time) VALUES
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440003', 0, '08:30', '18:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440003', 2, '08:30', '18:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440003', 3, '08:30', '20:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440003', 4, '08:30', '18:00');
+INSERT INTO staff_working_hours (staff_id, day_of_week, start_time, end_time) VALUES
+  ('b50e8400-e29b-41d4-a716-446655440003', 0, '08:30', '18:00'),
+  ('b50e8400-e29b-41d4-a716-446655440003', 2, '08:30', '18:00'),
+  ('b50e8400-e29b-41d4-a716-446655440003', 3, '08:30', '20:00'),
+  ('b50e8400-e29b-41d4-a716-446655440003', 4, '08:30', '18:00');
 
 -- Sophie: Mo-Do
-INSERT INTO staff_working_hours (salon_id, staff_id, day_of_week, start_time, end_time) VALUES
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440004', 0, '08:30', '18:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440004', 1, '08:30', '18:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440004', 2, '08:30', '18:00'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440004', 3, '08:30', '20:00');
+INSERT INTO staff_working_hours (staff_id, day_of_week, start_time, end_time) VALUES
+  ('b50e8400-e29b-41d4-a716-446655440004', 0, '08:30', '18:00'),
+  ('b50e8400-e29b-41d4-a716-446655440004', 1, '08:30', '18:00'),
+  ('b50e8400-e29b-41d4-a716-446655440004', 2, '08:30', '18:00'),
+  ('b50e8400-e29b-41d4-a716-446655440004', 3, '08:30', '20:00');
 
 -- ============================================
 -- 14. CREATE STAFF SERVICE SKILLS
 -- ============================================
 
 -- Vanessa can do all services
-INSERT INTO staff_service_skills (salon_id, staff_id, service_id)
-SELECT '550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440001', id
+INSERT INTO staff_service_skills (staff_id, service_id)
+SELECT 'b50e8400-e29b-41d4-a716-446655440001', id
 FROM services WHERE salon_id = '550e8400-e29b-41d4-a716-446655440001';
 
 -- Laura: Haarschnitte, Colorationen, Styling
-INSERT INTO staff_service_skills (salon_id, staff_id, service_id) VALUES
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440001'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440002'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440003'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440010'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440011'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440012'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440031'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440032');
+INSERT INTO staff_service_skills (staff_id, service_id) VALUES
+  ('b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440001'),
+  ('b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440002'),
+  ('b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440003'),
+  ('b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440010'),
+  ('b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440011'),
+  ('b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440012'),
+  ('b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440031'),
+  ('b50e8400-e29b-41d4-a716-446655440002', '750e8400-e29b-41d4-a716-446655440032');
 
 -- Marco: Herren, Kinder
-INSERT INTO staff_service_skills (salon_id, staff_id, service_id) VALUES
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440003', '750e8400-e29b-41d4-a716-446655440002'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440003', '750e8400-e29b-41d4-a716-446655440003'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440003', '750e8400-e29b-41d4-a716-446655440004');
+INSERT INTO staff_service_skills (staff_id, service_id) VALUES
+  ('b50e8400-e29b-41d4-a716-446655440003', '750e8400-e29b-41d4-a716-446655440002'),
+  ('b50e8400-e29b-41d4-a716-446655440003', '750e8400-e29b-41d4-a716-446655440003'),
+  ('b50e8400-e29b-41d4-a716-446655440003', '750e8400-e29b-41d4-a716-446655440004');
 
 -- Sophie: Basic Haarschnitte, Behandlungen
-INSERT INTO staff_service_skills (salon_id, staff_id, service_id) VALUES
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440004', '750e8400-e29b-41d4-a716-446655440001'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440004', '750e8400-e29b-41d4-a716-446655440003'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440004', '750e8400-e29b-41d4-a716-446655440020'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440004', '750e8400-e29b-41d4-a716-446655440021'),
-  ('550e8400-e29b-41d4-a716-446655440001', 'b50e8400-e29b-41d4-a716-446655440004', '750e8400-e29b-41d4-a716-446655440032');
-
--- ============================================
--- 15. CREATE BOOKING RULES
--- ============================================
-
-INSERT INTO booking_rules (salon_id, min_lead_time_minutes, max_booking_horizon_days, cancellation_cutoff_hours, slot_granularity_minutes, buffer_between_minutes, require_deposit, deposit_percent, no_show_policy) VALUES
-  ('550e8400-e29b-41d4-a716-446655440001', 60, 90, 24, 15, 0, false, 0, 'none');
+INSERT INTO staff_service_skills (staff_id, service_id) VALUES
+  ('b50e8400-e29b-41d4-a716-446655440004', '750e8400-e29b-41d4-a716-446655440001'),
+  ('b50e8400-e29b-41d4-a716-446655440004', '750e8400-e29b-41d4-a716-446655440003'),
+  ('b50e8400-e29b-41d4-a716-446655440004', '750e8400-e29b-41d4-a716-446655440020'),
+  ('b50e8400-e29b-41d4-a716-446655440004', '750e8400-e29b-41d4-a716-446655440021'),
+  ('b50e8400-e29b-41d4-a716-446655440004', '750e8400-e29b-41d4-a716-446655440032');
 
 -- ============================================
 -- DONE

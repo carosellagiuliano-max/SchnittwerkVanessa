@@ -39,10 +39,17 @@ async function getProductsData(searchParams: {
       compare_at_price_cents,
       stock_quantity,
       sku,
-      category,
+      category_id,
       is_active,
-      image_url,
-      created_at
+      created_at,
+      product_categories (
+        id,
+        name
+      ),
+      product_images (
+        url,
+        is_primary
+      )
     `,
       { count: 'exact' }
     )
@@ -54,28 +61,44 @@ async function getProductsData(searchParams: {
   }
 
   if (category && category !== 'all') {
-    query = query.eq('category', category);
+    query = query.eq('category_id', category);
   }
 
   const { data, count, error } = await query;
 
   // Get categories for filter
   const { data: categoriesData } = await supabase
-    .from('products')
-    .select('category')
-    .not('category', 'is', null) as { data: { category: string | null }[] | null };
-
-  const categories = [
-    ...new Set(categoriesData?.map((p) => p.category).filter(Boolean)),
-  ] as string[];
+    .from('product_categories')
+    .select('id, name')
+    .eq('is_active', true)
+    .order('name') as { data: { id: string; name: string }[] | null };
 
   if (error) {
     console.error('Error fetching products:', error);
     return { products: [], total: 0, page, limit, categories: [] };
   }
 
+  // Transform data to include category name and primary image
+  const products = (data || []).map((p: any) => {
+    // Find primary image, or first image, or null
+    const images = p.product_images || [];
+    const primaryImage = images.find((img: any) => img.is_primary) || images[0];
+
+    return {
+      ...p,
+      category: p.product_categories?.name || null,
+      image_url: primaryImage?.url || null,
+    };
+  });
+
+  // Transform categories for the dropdown
+  const categories = (categoriesData || []).map((c) => ({
+    id: c.id,
+    name: c.name,
+  }));
+
   return {
-    products: data || [],
+    products,
     total: count || 0,
     page,
     limit,

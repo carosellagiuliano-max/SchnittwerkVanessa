@@ -13,11 +13,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
     }
 
-    // Check staff role
+    // Check staff role (only active staff)
     const { data: staffMember } = await supabase
       .from('staff')
       .select('id, role')
-      .eq('user_id', user.id)
+      .eq('profile_id', user.id)
+      .eq('is_active', true)
       .single();
 
     if (!staffMember || !['admin', 'manager', 'hq'].includes(staffMember.role)) {

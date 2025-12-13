@@ -402,6 +402,7 @@ function getAbsencesForDay(
 
 /**
  * Get blocked times for a staff member on a day
+ * Includes both staff-specific blocks and salon-wide blocks (staffId null)
  */
 function getBlockedTimesForDay(
   blockedTimes: BlockedTime[],
@@ -414,7 +415,8 @@ function getBlockedTimesForDay(
   return blockedTimes
     .filter(
       (b) =>
-        b.staffId === staffId &&
+        // Match staff-specific blocks OR salon-wide blocks (null staffId)
+        (b.staffId === staffId || b.staffId === null) &&
         isBefore(b.startsAt, dayEnd) &&
         isAfter(b.endsAt, dayStart)
     )

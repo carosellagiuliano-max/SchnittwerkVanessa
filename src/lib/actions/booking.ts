@@ -89,11 +89,15 @@ export const getBookingPageData = unstable_cache(
         .eq('is_active', true)
         .order('sort_order'),
 
-      // Staff skills
+      // Staff skills - join via staff table since skills doesn't have salon_id
       supabase
         .from('staff_service_skills')
-        .select('staff_id, service_id')
-        .eq('salon_id', salonId),
+        .select(`
+          staff_id,
+          service_id,
+          staff!inner(salon_id)
+        `)
+        .eq('staff.salon_id', salonId),
 
       // Opening hours
       supabase
@@ -102,11 +106,18 @@ export const getBookingPageData = unstable_cache(
         .eq('salon_id', salonId)
         .order('day_of_week'),
 
-      // Staff working hours
+      // Staff working hours - join via staff table since working_hours doesn't have salon_id
       supabase
         .from('staff_working_hours')
-        .select('staff_id, day_of_week, start_time, end_time')
-        .eq('salon_id', salonId),
+        .select(`
+          staff_id,
+          day_of_week,
+          start_time,
+          end_time,
+          staff!inner(salon_id)
+        `)
+        .eq('staff.salon_id', salonId)
+        .eq('is_active', true),
 
       // Booking rules
       supabase
@@ -264,7 +275,7 @@ export async function getStaffAbsencesForDateRange(
 }
 
 // ============================================
-// GET BLOCKED TIMES
+// GET BLOCKED TIMES (from staff_blocks table)
 // ============================================
 
 export async function getBlockedTimes(
@@ -274,24 +285,58 @@ export async function getBlockedTimes(
 ): Promise<BlockedTime[]> {
   const supabase = createServerClient();
 
-  const { data, error } = await supabase
-    .from('blocked_times')
-    .select('staff_id, starts_at, ends_at, reason')
+  // Query staff_blocks table for staff-specific blocked times
+  const { data: staffBlocks, error: staffBlocksError } = await supabase
+    .from('staff_blocks')
+    .select('staff_id, start_time, end_time, reason')
     .eq('salon_id', salonId)
-    .lte('starts_at', endDate)
-    .gte('ends_at', startDate);
+    .lte('start_time', endDate)
+    .gte('end_time', startDate);
 
-  if (error) {
-    console.error('Error fetching blocked times:', error);
-    return [];
+  if (staffBlocksError) {
+    console.error('Error fetching staff blocks:', staffBlocksError);
   }
 
-  return (data || []).map((b) => ({
-    staffId: b.staff_id,
-    startsAt: new Date(b.starts_at),
-    endsAt: new Date(b.ends_at),
-    reason: b.reason || undefined,
-  }));
+  // Also query salon-wide blocked_times
+  const { data: salonBlocks, error: salonBlocksError } = await supabase
+    .from('blocked_times')
+    .select('start_time, end_time, reason')
+    .eq('salon_id', salonId)
+    .lte('start_time', endDate)
+    .gte('end_time', startDate);
+
+  if (salonBlocksError) {
+    console.error('Error fetching salon blocked times:', salonBlocksError);
+  }
+
+  // Combine both types of blocks
+  const results: BlockedTime[] = [];
+
+  // Add staff-specific blocks
+  if (staffBlocks) {
+    for (const b of staffBlocks) {
+      results.push({
+        staffId: b.staff_id,
+        startsAt: new Date(b.start_time),
+        endsAt: new Date(b.end_time),
+        reason: b.reason || undefined,
+      });
+    }
+  }
+
+  // Add salon-wide blocks (apply to all staff - staffId null means all)
+  if (salonBlocks) {
+    for (const b of salonBlocks) {
+      results.push({
+        staffId: null, // null means applies to all staff
+        startsAt: new Date(b.start_time),
+        endsAt: new Date(b.end_time),
+        reason: b.reason || undefined,
+      });
+    }
+  }
+
+  return results;
 }
 
 // ============================================

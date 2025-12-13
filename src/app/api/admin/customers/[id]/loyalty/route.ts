@@ -40,11 +40,12 @@ export async function POST(
       return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
     }
 
-    // Check staff role
+    // Check staff role (only active staff)
     const { data: staffMember } = await supabase
       .from('staff')
       .select('id, role, salon_id')
-      .eq('user_id', user.id)
+      .eq('profile_id', user.id)
+      .eq('is_active', true)
       .single() as { data: StaffMember | null };
 
     if (!staffMember || !['admin', 'manager', 'hq'].includes(staffMember.role)) {
@@ -188,12 +189,13 @@ export async function GET(
       return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
     }
 
-    // Check staff role
+    // Check staff role (only active staff)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: staffMember } = await (supabase as any)
       .from('staff')
       .select('id, role')
-      .eq('user_id', user.id)
+      .eq('profile_id', user.id)
+      .eq('is_active', true)
       .single();
 
     if (!staffMember) {

@@ -65,13 +65,14 @@ CREATE TRIGGER update_customers_updated_at
 CREATE TABLE staff (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   salon_id UUID NOT NULL REFERENCES salons(id) ON DELETE CASCADE,
-  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  profile_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
 
   -- Staff Info
   display_name TEXT NOT NULL,
   job_title TEXT,
   bio TEXT,
   avatar_url TEXT,
+  specialties TEXT[],
 
   -- Booking settings
   is_bookable BOOLEAN NOT NULL DEFAULT true,
@@ -215,34 +216,8 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- ============================================
--- VIEW: Active customers with computed fields
--- ============================================
-CREATE VIEW v_active_customers AS
-SELECT
-  c.*,
-  c.first_name || ' ' || c.last_name AS full_name,
-  p.email,
-  p.phone AS profile_phone,
-  (
-    SELECT COUNT(*)
-    FROM appointments a
-    WHERE a.customer_id = c.id
-    AND a.status = 'completed'
-  ) AS total_appointments,
-  (
-    SELECT MAX(a.start_time)
-    FROM appointments a
-    WHERE a.customer_id = c.id
-    AND a.status = 'completed'
-  ) AS last_appointment_date
-FROM customers c
-JOIN profiles p ON c.profile_id = p.id
-WHERE c.is_active = true;
-
-COMMENT ON VIEW v_active_customers IS 'Active customers with computed statistics';
-
--- ============================================
 -- VIEW: Active bookable staff
+-- (Note: v_active_customers moved to 00005 due to appointments dependency)
 -- ============================================
 CREATE VIEW v_bookable_staff AS
 SELECT

@@ -36,6 +36,10 @@ async function getCustomersData(searchParams: {
       phone,
       created_at,
       is_active,
+      profile:profiles!profile_id (
+        email,
+        phone
+      ),
       appointments (count)
     `,
       { count: 'exact' }
@@ -45,7 +49,7 @@ async function getCustomersData(searchParams: {
 
   if (search) {
     query = query.or(
-      `first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`
+      `first_name.ilike.%${search}%,last_name.ilike.%${search}%`
     );
   }
 

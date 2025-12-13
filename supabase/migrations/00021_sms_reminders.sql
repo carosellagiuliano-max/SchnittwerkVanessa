@@ -185,7 +185,7 @@ USING (
     JOIN staff s ON s.id = a.staff_id
     WHERE a.id = appointment_reminders.appointment_id
     AND s.salon_id IN (
-      SELECT salon_id FROM staff WHERE user_id = auth.uid()
+      SELECT salon_id FROM staff WHERE profile_id = auth.uid()
     )
   )
 );
@@ -196,18 +196,16 @@ ON notification_logs FOR SELECT
 TO authenticated
 USING (
   salon_id IN (
-    SELECT salon_id FROM staff WHERE user_id = auth.uid()
+    SELECT salon_id FROM staff WHERE profile_id = auth.uid()
   )
 );
 
--- Notification Preferences: Customers can manage their own
-CREATE POLICY "Customers can manage own preferences"
+-- Notification Preferences: Users can manage their own
+CREATE POLICY "Users can manage own preferences"
 ON notification_preferences FOR ALL
 TO authenticated
 USING (
-  customer_id IN (
-    SELECT id FROM customers WHERE user_id = auth.uid()
-  )
+  profile_id = auth.uid()
 );
 
 -- SMS Templates: Admin can manage salon templates
@@ -217,9 +215,10 @@ TO authenticated
 USING (
   salon_id IS NULL OR
   salon_id IN (
-    SELECT salon_id FROM staff
-    WHERE user_id = auth.uid()
-    AND role IN ('admin', 'manager')
+    SELECT s.salon_id FROM staff s
+    JOIN user_roles ur ON ur.profile_id = s.profile_id AND ur.salon_id = s.salon_id
+    WHERE s.profile_id = auth.uid()
+    AND ur.role_name IN ('admin', 'manager')
   )
 );
 

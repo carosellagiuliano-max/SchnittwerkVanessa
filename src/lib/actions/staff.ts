@@ -1,7 +1,6 @@
 'use server';
 
 import { createServerClient } from '@/lib/db/client';
-import { unstable_cache } from 'next/cache';
 
 // ============================================
 // STAFF DATA SERVER ACTIONS
@@ -36,99 +35,114 @@ export type StaffAbsence = {
 };
 
 // ============================================
-// GET STAFF MEMBERS
+// GET STAFF MEMBERS (Fresh - no caching)
 // ============================================
 
-export const getStaffMembers = unstable_cache(
-  async (salonId: string = DEFAULT_SALON_ID): Promise<StaffMember[]> => {
-    const supabase = createServerClient();
+interface StaffRow {
+  id: string;
+  display_name: string;
+  job_title: string | null;
+  bio: string | null;
+  avatar_url: string | null;
+  is_bookable: boolean;
+  sort_order: number;
+  specialties: string[] | null;
+}
 
-    const { data, error } = await supabase
-      .from('staff')
-      .select(`
-        id,
-        display_name,
-        job_title,
-        bio,
-        avatar_url,
-        is_bookable,
-        sort_order,
-        specialties
-      `)
-      .eq('salon_id', salonId)
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true });
+export async function getStaffMembers(salonId: string = DEFAULT_SALON_ID): Promise<StaffMember[]> {
+  const supabase = createServerClient();
 
-    if (error || !data) {
-      console.error('Error fetching staff:', error);
-      return [];
-    }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase
+    .from('staff') as any)
+    .select(`
+      id,
+      display_name,
+      job_title,
+      bio,
+      avatar_url,
+      is_bookable,
+      sort_order,
+      specialties
+    `)
+    .eq('salon_id', salonId)
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true });
 
-    return data.map((member) => ({
-      id: member.id,
-      displayName: member.display_name,
-      jobTitle: member.job_title,
-      bio: member.bio,
-      avatarUrl: member.avatar_url,
-      isBookable: member.is_bookable,
-      sortOrder: member.sort_order,
-      specialties: member.specialties || [],
-    }));
-  },
-  ['staff-members'],
-  { revalidate: 3600, tags: ['staff'] }
-);
+  if (error || !data) {
+    console.error('Error fetching staff:', error);
+    return [];
+  }
+
+  return (data as StaffRow[]).map((member) => ({
+    id: member.id,
+    displayName: member.display_name,
+    jobTitle: member.job_title,
+    bio: member.bio,
+    avatarUrl: member.avatar_url,
+    isBookable: member.is_bookable,
+    sortOrder: member.sort_order,
+    specialties: member.specialties || [],
+  }));
+}
 
 // ============================================
 // GET BOOKABLE STAFF (for booking flow)
 // ============================================
 
-export const getBookableStaff = unstable_cache(
-  async (salonId: string = DEFAULT_SALON_ID): Promise<StaffMember[]> => {
-    const allStaff = await getStaffMembers(salonId);
-    return allStaff.filter((member) => member.isBookable);
-  },
-  ['bookable-staff'],
-  { revalidate: 3600, tags: ['staff'] }
-);
+export async function getBookableStaff(salonId: string = DEFAULT_SALON_ID): Promise<StaffMember[]> {
+  const allStaff = await getStaffMembers(salonId);
+  return allStaff.filter((member) => member.isBookable);
+}
 
 // ============================================
 // GET STAFF WORKING HOURS
 // ============================================
 
-export const getStaffWorkingHours = unstable_cache(
-  async (salonId: string = DEFAULT_SALON_ID): Promise<StaffWorkingHours[]> => {
-    const supabase = createServerClient();
+interface WorkingHoursRow {
+  staff_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
 
-    const { data, error } = await supabase
-      .from('staff_working_hours')
-      .select(`
-        staff_id,
-        day_of_week,
-        start_time,
-        end_time
-      `)
-      .eq('salon_id', salonId);
+export async function getStaffWorkingHours(salonId: string = DEFAULT_SALON_ID): Promise<StaffWorkingHours[]> {
+  const supabase = createServerClient();
 
-    if (error || !data) {
-      console.error('Error fetching staff working hours:', error);
-      return [];
-    }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase
+    .from('staff_working_hours') as any)
+    .select(`
+      staff_id,
+      day_of_week,
+      start_time,
+      end_time
+    `)
+    .eq('salon_id', salonId);
 
-    return data.map((row) => ({
-      staffId: row.staff_id,
-      dayOfWeek: row.day_of_week,
-      startTime: row.start_time,
-      endTime: row.end_time,
-    }));
-  },
-  ['staff-working-hours'],
-  { revalidate: 3600, tags: ['staff'] }
-);
+  if (error || !data) {
+    console.error('Error fetching staff working hours:', error);
+    return [];
+  }
+
+  return (data as WorkingHoursRow[]).map((row) => ({
+    staffId: row.staff_id,
+    dayOfWeek: row.day_of_week,
+    startTime: row.start_time,
+    endTime: row.end_time,
+  }));
+}
 
 // ============================================
 // GET STAFF ABSENCES (for date range)
 // ============================================
+
+interface AbsenceRow {
+  staff_id: string;
+  start_date: string;
+  end_date: string;
+  reason: string | null;
+}
 
 export async function getStaffAbsences(
   salonId: string = DEFAULT_SALON_ID,
@@ -137,8 +151,9 @@ export async function getStaffAbsences(
 ): Promise<StaffAbsence[]> {
   const supabase = createServerClient();
 
-  const { data, error } = await supabase
-    .from('staff_absences')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase
+    .from('staff_absences') as any)
     .select(`
       staff_id,
       start_date,
@@ -153,7 +168,7 @@ export async function getStaffAbsences(
     return [];
   }
 
-  return data.map((row) => ({
+  return (data as AbsenceRow[]).map((row) => ({
     staffId: row.staff_id,
     startDate: row.start_date,
     endDate: row.end_date,
@@ -165,33 +180,35 @@ export async function getStaffAbsences(
 // GET STAFF SKILLS (services they can perform)
 // ============================================
 
-export const getStaffSkills = unstable_cache(
-  async (salonId: string = DEFAULT_SALON_ID): Promise<Map<string, string[]>> => {
-    const supabase = createServerClient();
+interface SkillRow {
+  staff_id: string;
+  service_id: string;
+}
 
-    const { data, error } = await supabase
-      .from('staff_service_skills')
-      .select(`
-        staff_id,
-        service_id
-      `)
-      .eq('salon_id', salonId);
+export async function getStaffSkills(salonId: string = DEFAULT_SALON_ID): Promise<Map<string, string[]>> {
+  const supabase = createServerClient();
 
-    if (error || !data) {
-      console.error('Error fetching staff skills:', error);
-      return new Map();
-    }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase
+    .from('staff_service_skills') as any)
+    .select(`
+      staff_id,
+      service_id
+    `)
+    .eq('salon_id', salonId);
 
-    const skillsMap = new Map<string, string[]>();
+  if (error || !data) {
+    console.error('Error fetching staff skills:', error);
+    return new Map();
+  }
 
-    data.forEach((row) => {
-      const existing = skillsMap.get(row.staff_id) || [];
-      existing.push(row.service_id);
-      skillsMap.set(row.staff_id, existing);
-    });
+  const skillsMap = new Map<string, string[]>();
 
-    return skillsMap;
-  },
-  ['staff-skills'],
-  { revalidate: 3600, tags: ['staff'] }
-);
+  (data as SkillRow[]).forEach((row) => {
+    const existing = skillsMap.get(row.staff_id) || [];
+    existing.push(row.service_id);
+    skillsMap.set(row.staff_id, existing);
+  });
+
+  return skillsMap;
+}

@@ -53,12 +53,11 @@ WHERE shipping_method = 'pickup' AND status NOT IN ('cancelled', 'completed');
 -- PRODUCTS - Common Query Patterns
 -- ============================================
 
--- Product search by name
-CREATE INDEX IF NOT EXISTS idx_products_name_search
-ON products USING gin (name gin_trgm_ops);
-
--- Note: Requires pg_trgm extension. Uncomment after enabling:
+-- Product search by name (requires pg_trgm extension)
 -- CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- Note: pg_trgm needs to be enabled at database level first
+-- CREATE INDEX IF NOT EXISTS idx_products_name_search
+-- ON products USING gin (name gin_trgm_ops);
 
 -- Featured products
 CREATE INDEX IF NOT EXISTS idx_products_featured
@@ -80,7 +79,7 @@ ON customers (salon_id, last_name text_pattern_ops, first_name text_pattern_ops)
 
 -- Birthday this month (for birthday greetings)
 CREATE INDEX IF NOT EXISTS idx_customers_birthday_month
-ON customers (salon_id, EXTRACT(MONTH FROM birthday), EXTRACT(DAY FROM birthday))
+ON customers (salon_id, birthday)
 WHERE birthday IS NOT NULL AND is_active = true;
 
 -- Inactive customers (no visit in X days)
@@ -117,7 +116,7 @@ WHERE is_active = true;
 
 -- Daily revenue aggregation
 CREATE INDEX IF NOT EXISTS idx_payments_daily_revenue
-ON payments (salon_id, DATE(succeeded_at), payment_method)
+ON payments (salon_id, succeeded_at, payment_method)
 WHERE status = 'succeeded';
 
 -- Stripe reconciliation
@@ -150,7 +149,7 @@ ON customer_loyalty (program_id, lifetime_points DESC);
 -- Points expiring soon
 CREATE INDEX IF NOT EXISTS idx_loyalty_trans_expiring
 ON loyalty_transactions (expires_at)
-WHERE expires_at IS NOT NULL AND expires_at > NOW();
+WHERE expires_at IS NOT NULL;
 
 -- ============================================
 -- NOTIFICATIONS - Common Query Patterns

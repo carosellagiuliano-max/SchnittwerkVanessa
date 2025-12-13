@@ -26,7 +26,8 @@ export async function GET(
     const { data: staffMember } = await supabase
       .from('staff')
       .select('id, role, salon_id')
-      .eq('user_id', user.id)
+      .eq('profile_id', user.id)
+      .eq('is_active', true)
       .single();
 
     if (!staffMember) {
@@ -80,7 +81,8 @@ export async function PUT(
     const { data: staffMember } = await supabase
       .from('staff')
       .select('id, role, salon_id')
-      .eq('user_id', user.id)
+      .eq('profile_id', user.id)
+      .eq('is_active', true)
       .single();
 
     if (!staffMember || !['admin', 'manager', 'hq'].includes(staffMember.role)) {
@@ -175,7 +177,8 @@ export async function DELETE(
     const { data: staffMember } = await supabase
       .from('staff')
       .select('id, role')
-      .eq('user_id', user.id)
+      .eq('profile_id', user.id)
+      .eq('is_active', true)
       .single();
 
     if (!staffMember || !['admin', 'hq'].includes(staffMember.role)) {

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 interface StaffSkill {
   staff_id: string;
   service_id: string;
-  proficiency_level: string;
+  skill_level: number | null;
 }
 
 interface WorkingHour {
@@ -42,7 +42,8 @@ async function getTeamData() {
     .select(
       `
       id,
-      user_id,
+      salon_id,
+      profile_id,
       display_name,
       email,
       phone,
@@ -50,7 +51,7 @@ async function getTeamData() {
       color,
       is_active,
       created_at,
-      working_hours,
+      default_schedule,
       employment_type,
       hire_date,
       bio,
@@ -80,8 +81,8 @@ async function getTeamData() {
 
   // Fetch staff skills
   const { data: skillsData } = await supabase
-    .from('staff_skills')
-    .select('staff_id, service_id, proficiency_level') as { data: StaffSkill[] | null };
+    .from('staff_service_skills')
+    .select('staff_id, service_id, skill_level') as { data: StaffSkill[] | null };
 
   // Fetch working hours
   const { data: workingHoursData } = await supabase

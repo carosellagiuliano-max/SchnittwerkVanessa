@@ -92,7 +92,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
   const { data: customer } = await supabase
     .from('customers')
     .select('id')
-    .eq('user_id', user.id)
+    .eq('profile_id', user.id)
     .single();
 
   if (!customer || order.customerId !== customer.id) {

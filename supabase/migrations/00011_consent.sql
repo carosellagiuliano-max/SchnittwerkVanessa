@@ -422,7 +422,7 @@ BEGIN
               AND created_at < NOW() - (policy.retention_days || ' days')::INTERVAL
             RETURNING id
           )
-          SELECT COUNT(*) INTO deleted FROM deleted;
+          SELECT COUNT(*) INTO affected FROM deleted;
         END IF;
 
       ELSE

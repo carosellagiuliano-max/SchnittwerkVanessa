@@ -82,11 +82,11 @@ interface CustomerDbRow {
     phone: string | null;
     avatar_url: string | null;
   } | null;
-  loyalty_accounts: {
+  customer_loyalty: {
     points_balance: number;
-    tier: string | null;
-    total_points_earned: number;
-  } | null;
+    lifetime_points: number;
+    current_tier_id: string | null;
+  }[] | null;
 }
 
 interface CustomerAppointmentRow {
@@ -117,7 +117,7 @@ interface LoyaltyTransactionRow {
 }
 
 interface ConsentRow {
-  consent_type: string;
+  category: string;
   consented: boolean;
 }
 
@@ -138,16 +138,17 @@ async function getCustomerData(customerId: string) {
         phone,
         avatar_url
       ),
-      loyalty_accounts (
+      customer_loyalty (
         points_balance,
-        tier,
-        total_points_earned
+        lifetime_points,
+        current_tier_id
       )
     `)
     .eq('id', customerId)
     .single() as { data: CustomerDbRow | null; error: unknown };
 
   if (error || !customer) {
+    console.error('Error fetching customer:', error);
     return null;
   }
 
@@ -192,7 +193,7 @@ async function getCustomerData(customerId: string) {
 
   // Get consents
   const { data: consentsData } = await supabase
-    .from('consents')
+    .from('consent_records')
     .select('*')
     .eq('profile_id', customer.profile_id || '') as { data: ConsentRow[] | null };
 
@@ -212,8 +213,8 @@ async function getCustomerData(customerId: string) {
   const lastVisit = completedAppointments[0];
 
   // Get marketing consent
-  const marketingConsent = consentsData?.find(c => c.consent_type === 'marketing')?.consented ?? false;
-  const dataConsent = consentsData?.find(c => c.consent_type === 'data_processing')?.consented ?? true;
+  const marketingConsent = consentsData?.find(c => c.category === 'marketing')?.consented ?? false;
+  const dataConsent = consentsData?.find(c => c.category === 'data_processing')?.consented ?? true;
 
   // Transform data
   const customerDetail: CustomerDetail = {
@@ -229,8 +230,8 @@ async function getCustomerData(customerId: string) {
     tags: customer.tags || [],
     totalVisits,
     totalSpent: appointmentSpend + orderSpend,
-    loyaltyPoints: customer.loyalty_accounts?.points_balance || 0,
-    loyaltyTier: customer.loyalty_accounts?.tier ?? null,
+    loyaltyPoints: customer.customer_loyalty?.[0]?.points_balance || 0,
+    loyaltyTier: customer.customer_loyalty?.[0]?.current_tier_id ?? null,
     createdAt: customer.created_at,
     lastVisitAt: lastVisit?.start_time || null,
     marketingConsent,

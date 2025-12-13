@@ -1,6 +1,6 @@
 'use server';
 
-import { createServerClient } from '@/lib/db/client';
+import { createServerClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
 // ============================================
@@ -37,7 +37,7 @@ export type RegisterResult = {
 };
 
 export async function registerCustomer(formData: FormData): Promise<RegisterResult> {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
 
   try {
     // Validate input
@@ -140,7 +140,7 @@ export type LoginResult = {
 };
 
 export async function loginCustomer(formData: FormData): Promise<LoginResult> {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
 
   try {
     const validatedFields = loginSchema.safeParse({
@@ -211,7 +211,7 @@ export type PasswordResetResult = {
 };
 
 export async function requestPasswordReset(formData: FormData): Promise<PasswordResetResult> {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
 
   try {
     const email = formData.get('email') as string;
@@ -242,7 +242,7 @@ export async function requestPasswordReset(formData: FormData): Promise<Password
 // ============================================
 
 export async function updatePassword(formData: FormData): Promise<PasswordResetResult> {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
 
   try {
     const password = formData.get('password') as string;
@@ -275,7 +275,7 @@ export async function updatePassword(formData: FormData): Promise<PasswordResetR
 // ============================================
 
 export async function getCurrentUser() {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
 
   const {
     data: { user },
@@ -312,6 +312,6 @@ export async function getCurrentUser() {
 // ============================================
 
 export async function logout() {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   await supabase.auth.signOut();
 }
