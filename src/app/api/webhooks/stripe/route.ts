@@ -18,15 +18,26 @@ function getStripe(): Stripe {
   });
 }
 
-// Initialize Supabase Admin Client (bypasses RLS)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } }
-);
+// Initialize Supabase Admin Client (lazy initialization to avoid build-time errors)
+function getSupabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Supabase URL or Service Role Key is not configured');
+  }
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false },
+  });
+}
 
 // Webhook secret for signature verification
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+function getWebhookSecret(): string {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!secret) {
+    throw new Error('STRIPE_WEBHOOK_SECRET is not configured');
+  }
+  return secret;
+}
 
 // ============================================
 // TYPES
@@ -84,7 +95,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     let event: Stripe.Event;
     try {
       const stripe = getStripe();
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+      event = stripe.webhooks.constructEvent(body, signature, getWebhookSecret());
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Unknown error';
       log('error', 'Webhook signature verification failed', { error: errMsg });
@@ -100,7 +111,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     log('info', 'Webhook received', { eventId, eventType });
 
     // Check idempotency - has this event already been processed?
-    const { data: existingEvent } = await supabaseAdmin
+    const { data: existingEvent } = await getSupabaseAdmin()
       .from('stripe_webhooks_log')
       .select('id, processed')
       .eq('stripe_event_id', eventId)
@@ -113,7 +124,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Log the event (or update if exists but not processed)
     if (!existingEvent) {
-      await supabaseAdmin.from('stripe_webhooks_log').insert({
+      await getSupabaseAdmin().from('stripe_webhooks_log').insert({
         stripe_event_id: eventId,
         event_type: eventType,
         payload: event.data.object as unknown as Record<string, unknown>,
@@ -168,7 +179,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Mark event as processed
     const processingTime = Date.now() - startTime;
-    await supabaseAdmin
+    await getSupabaseAdmin()
       .from('stripe_webhooks_log')
       .update({
         processed: true,
@@ -197,7 +208,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Log error to database if we have an event ID
     if (eventId) {
-      await supabaseAdmin
+      await getSupabaseAdmin()
         .from('stripe_webhooks_log')
         .update({
           processed: true,
@@ -235,7 +246,7 @@ async function handleCheckoutSessionCompleted(
 
   try {
     // Update order using database function
-    const { error } = await supabaseAdmin.rpc('handle_payment_success', {
+    const { error } = await getSupabaseAdmin().rpc('handle_payment_success', {
       p_order_id: orderId,
       p_stripe_session_id: session.id,
       p_stripe_payment_intent_id:
@@ -250,7 +261,7 @@ async function handleCheckoutSessionCompleted(
     }
 
     // Get order details for email
-    const { data: order } = await supabaseAdmin
+    const { data: order } = await getSupabaseAdmin()
       .from('orders')
       .select('*, order_items(*)')
       .eq('id', orderId)
@@ -300,7 +311,7 @@ async function handleCheckoutSessionExpired(
 
   try {
     // Update order status to expired/cancelled
-    const { error } = await supabaseAdmin
+    const { error } = await getSupabaseAdmin()
       .from('orders')
       .update({
         status: 'cancelled',
@@ -318,7 +329,7 @@ async function handleCheckoutSessionExpired(
     }
 
     // Record status change
-    await supabaseAdmin.from('order_status_history').insert({
+    await getSupabaseAdmin().from('order_status_history').insert({
       order_id: orderId,
       previous_status: 'pending',
       new_status: 'cancelled',
@@ -354,7 +365,7 @@ async function handlePaymentIntentSucceeded(
   }
 
   try {
-    const { error } = await supabaseAdmin.rpc('handle_payment_success', {
+    const { error } = await getSupabaseAdmin().rpc('handle_payment_success', {
       p_order_id: orderId,
       p_stripe_payment_intent_id: paymentIntent.id,
       p_stripe_charge_id: typeof paymentIntent.latest_charge === 'string'
@@ -395,7 +406,7 @@ async function handlePaymentIntentFailed(
     const errorMessage =
       paymentIntent.last_payment_error?.message || 'Zahlung fehlgeschlagen';
 
-    const { error } = await supabaseAdmin
+    const { error } = await getSupabaseAdmin()
       .from('orders')
       .update({
         payment_status: 'failed',
@@ -409,7 +420,7 @@ async function handlePaymentIntentFailed(
     }
 
     // Get order for email
-    const { data: order } = await supabaseAdmin
+    const { data: order } = await getSupabaseAdmin()
       .from('orders')
       .select('customer_email, customer_name, order_number, total_cents')
       .eq('id', orderId)
@@ -457,7 +468,7 @@ async function handleChargeRefunded(charge: Stripe.Charge): Promise<WebhookResul
 
   try {
     // Find order by payment intent
-    const { data: order } = await supabaseAdmin
+    const { data: order } = await getSupabaseAdmin()
       .from('orders')
       .select('id, status, total_cents, refunded_amount_cents')
       .eq('stripe_payment_intent_id', paymentIntentId)
@@ -465,7 +476,7 @@ async function handleChargeRefunded(charge: Stripe.Charge): Promise<WebhookResul
 
     if (!order) {
       // Try to find by charge ID
-      const { data: orderByCharge } = await supabaseAdmin
+      const { data: orderByCharge } = await getSupabaseAdmin()
         .from('orders')
         .select('id, status, total_cents, refunded_amount_cents')
         .eq('stripe_charge_id', charge.id)
@@ -487,7 +498,7 @@ async function handleChargeRefunded(charge: Stripe.Charge): Promise<WebhookResul
     const isFullRefund = charge.refunded;
 
     // Update order
-    const { error } = await supabaseAdmin
+    const { error } = await getSupabaseAdmin()
       .from('orders')
       .update({
         refunded_amount_cents: refundedAmount,
@@ -503,7 +514,7 @@ async function handleChargeRefunded(charge: Stripe.Charge): Promise<WebhookResul
     }
 
     // Record refund in payment_events
-    await supabaseAdmin.from('payment_events').insert({
+    await getSupabaseAdmin().from('payment_events').insert({
       order_id: orderId,
       event_type: isFullRefund ? 'refund' : 'partial_refund',
       amount_cents: refundedAmount,
@@ -514,14 +525,14 @@ async function handleChargeRefunded(charge: Stripe.Charge): Promise<WebhookResul
     });
 
     // Record status change
-    await supabaseAdmin.from('order_status_history').insert({
+    await getSupabaseAdmin().from('order_status_history').insert({
       order_id: orderId,
       new_status: isFullRefund ? 'refunded' : 'partial_refund',
       notes: `Rückerstattung: CHF ${(refundedAmount / 100).toFixed(2)}`,
     });
 
     // Get order for email
-    const { data: fullOrder } = await supabaseAdmin
+    const { data: fullOrder } = await getSupabaseAdmin()
       .from('orders')
       .select('*, order_items(*)')
       .eq('id', orderId)
@@ -564,7 +575,7 @@ async function handleDisputeCreated(dispute: Stripe.Dispute): Promise<WebhookRes
 
   try {
     // Find order by charge
-    const { data: order } = await supabaseAdmin
+    const { data: order } = await getSupabaseAdmin()
       .from('orders')
       .select('id')
       .eq('stripe_charge_id', chargeId)
@@ -576,7 +587,7 @@ async function handleDisputeCreated(dispute: Stripe.Dispute): Promise<WebhookRes
     }
 
     // Update order with dispute info
-    const { error } = await supabaseAdmin
+    const { error } = await getSupabaseAdmin()
       .from('orders')
       .update({
         has_dispute: true,
@@ -590,7 +601,7 @@ async function handleDisputeCreated(dispute: Stripe.Dispute): Promise<WebhookRes
     }
 
     // Record in payment_events
-    await supabaseAdmin.from('payment_events').insert({
+    await getSupabaseAdmin().from('payment_events').insert({
       order_id: order.id,
       event_type: 'dispute_created',
       amount_cents: dispute.amount,
@@ -631,7 +642,7 @@ async function handleDisputeClosed(dispute: Stripe.Dispute): Promise<WebhookResu
   }
 
   try {
-    const { data: order } = await supabaseAdmin
+    const { data: order } = await getSupabaseAdmin()
       .from('orders')
       .select('id')
       .eq('stripe_charge_id', chargeId)
@@ -655,7 +666,7 @@ async function handleDisputeClosed(dispute: Stripe.Dispute): Promise<WebhookResu
       updateData.status = 'cancelled';
     }
 
-    const { error } = await supabaseAdmin
+    const { error } = await getSupabaseAdmin()
       .from('orders')
       .update(updateData)
       .eq('id', order.id);
@@ -665,7 +676,7 @@ async function handleDisputeClosed(dispute: Stripe.Dispute): Promise<WebhookResu
     }
 
     // Record in payment_events
-    await supabaseAdmin.from('payment_events').insert({
+    await getSupabaseAdmin().from('payment_events').insert({
       order_id: order.id,
       event_type: won ? 'dispute_won' : 'dispute_lost',
       amount_cents: dispute.amount,
@@ -827,7 +838,7 @@ async function processVoucherItems(order: Record<string, unknown>): Promise<void
   for (const item of voucherItems) {
     try {
       // Generate voucher code
-      const { data: code, error: codeError } = await supabaseAdmin.rpc(
+      const { data: code, error: codeError } = await getSupabaseAdmin().rpc(
         'generate_voucher_code',
         { p_salon_id: order.salon_id }
       );
@@ -845,7 +856,7 @@ async function processVoucherItems(order: Record<string, unknown>): Promise<void
       expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
       // Create voucher in database
-      const { data: voucher, error: voucherError } = await supabaseAdmin
+      const { data: voucher, error: voucherError } = await getSupabaseAdmin()
         .from('vouchers')
         .insert({
           salon_id: order.salon_id,
@@ -878,7 +889,7 @@ async function processVoucherItems(order: Record<string, unknown>): Promise<void
       }
 
       // Update order item with voucher ID
-      await supabaseAdmin
+      await getSupabaseAdmin()
         .from('order_items')
         .update({ voucher_id: voucher.id })
         .eq('id', item.id);

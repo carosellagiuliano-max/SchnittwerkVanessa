@@ -7,9 +7,16 @@ import type { Database } from '@/lib/db/types';
 // ============================================
 
 export async function createServerClient() {
+  // Use internal URL for Docker (server-side), fall back to public URL
+  const supabaseUrl = process.env.SUPABASE_URL_INTERNAL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // Return null if env vars are not available (e.g., during build)
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return null;
+  }
+
   const cookieStore = await cookies();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
   return createSupabaseServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -37,8 +44,14 @@ export async function createServerClient() {
 // ============================================
 
 export function createServiceRoleClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  // Use internal URL for Docker (server-side), fall back to public URL
+  const supabaseUrl = process.env.SUPABASE_URL_INTERNAL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  // Return null if env vars are not available (e.g., during build)
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return null;
+  }
 
   return createSupabaseServerClient<Database>(supabaseUrl, supabaseServiceKey, {
     cookies: {

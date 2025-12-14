@@ -7,64 +7,83 @@
 -- It creates test data for the SCHNITTWERK salon in St. Gallen.
 
 -- ============================================
--- 0. CREATE ADMIN USER
+-- 0. CREATE ADMIN USER (defensive - only if auth schema ready)
 -- ============================================
 
--- Create admin user in auth.users
-INSERT INTO auth.users (
-  id,
-  instance_id,
-  email,
-  encrypted_password,
-  email_confirmed_at,
-  confirmation_token,
-  recovery_token,
-  email_change_token_new,
-  email_change,
-  created_at,
-  updated_at,
-  raw_app_meta_data,
-  raw_user_meta_data,
-  is_super_admin,
-  aud,
-  role
-) VALUES (
-  'a50e8400-e29b-41d4-a716-446655440001',
-  '00000000-0000-0000-0000-000000000000',
-  'admin@schnittwerk.ch',
-  crypt('admin123', gen_salt('bf')),
-  NOW(),
-  '',
-  '',
-  '',
-  '',
-  NOW(),
-  NOW(),
-  '{"provider": "email", "providers": ["email"]}',
-  '{"first_name": "Admin", "last_name": "Schnittwerk"}',
-  false,
-  'authenticated',
-  'authenticated'
-);
+-- Create admin user in auth.users only if the schema is ready
+-- This handles the case where the seed runs before GoTrue has set up auth schema
+DO $$
+BEGIN
+  -- Check if auth.users table exists with expected columns
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'auth'
+    AND table_name = 'users'
+    AND column_name = 'email_confirmed_at'
+  ) THEN
+    -- Only insert if user doesn't already exist
+    INSERT INTO auth.users (
+      id,
+      instance_id,
+      email,
+      encrypted_password,
+      email_confirmed_at,
+      confirmation_token,
+      recovery_token,
+      email_change_token_new,
+      email_change,
+      created_at,
+      updated_at,
+      raw_app_meta_data,
+      raw_user_meta_data,
+      is_super_admin,
+      aud,
+      role
+    ) VALUES (
+      'a50e8400-e29b-41d4-a716-446655440001',
+      '00000000-0000-0000-0000-000000000000',
+      'admin@schnittwerk.ch',
+      crypt('admin123', gen_salt('bf')),
+      NOW(),
+      '',
+      '',
+      '',
+      '',
+      NOW(),
+      NOW(),
+      '{"provider": "email", "providers": ["email"]}',
+      '{"first_name": "Admin", "last_name": "Schnittwerk"}',
+      false,
+      'authenticated',
+      'authenticated'
+    )
+    ON CONFLICT (id) DO NOTHING;
 
--- Create identity for the user
-INSERT INTO auth.identities (
-  id,
-  user_id,
-  provider_id,
-  identity_data,
-  provider,
-  created_at,
-  updated_at
-) VALUES (
-  'a50e8400-e29b-41d4-a716-446655440001',
-  'a50e8400-e29b-41d4-a716-446655440001',
-  'admin@schnittwerk.ch',
-  '{"sub": "a50e8400-e29b-41d4-a716-446655440001", "email": "admin@schnittwerk.ch"}',
-  'email',
-  NOW(),
-  NOW()
-);
+    -- Create identity for the user
+    INSERT INTO auth.identities (
+      id,
+      user_id,
+      provider_id,
+      identity_data,
+      provider,
+      created_at,
+      updated_at
+    ) VALUES (
+      'a50e8400-e29b-41d4-a716-446655440001',
+      'a50e8400-e29b-41d4-a716-446655440001',
+      'admin@schnittwerk.ch',
+      '{"sub": "a50e8400-e29b-41d4-a716-446655440001", "email": "admin@schnittwerk.ch"}',
+      'email',
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (id) DO NOTHING;
+
+    RAISE NOTICE 'Admin user created successfully';
+  ELSE
+    RAISE NOTICE 'Auth schema not ready - skipping admin user creation. Create via Supabase Studio or run seed again after auth service starts.';
+  END IF;
+END $$;
 
 -- ============================================
 -- 1. CREATE SALON
