@@ -1,0 +1,311 @@
+# SCHNITTWERK - Docker Compose Stack (DEVELOPMENT)
+# Includes: Next.js App + Supabase (Postgres, Auth, Storage, Realtime, Studio)
+# Run with: docker compose -f docker-compose.dev.yml up -d
+#
+# EXPOSED PORTS for local development:
+# - App:      http://localhost:3000
+# - Supabase: http://localhost:54321
+# - Studio:   http://localhost:54323
+# - Postgres: localhost:54322
+
+services:
+  # ===========================================
+  # Next.js Application
+  # ===========================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Browser uses localhost:54321 (baked at build time)
+        - NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY}
+        - SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+        - NEXT_PUBLIC_SITE_URL=${SITE_URL:-http://localhost:3000}
+    container_name: schnittwerk-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      # Browser URL (also set at runtime for any dynamic usage)
+      - NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+      - NEXT_PUBLIC_SITE_URL=${SITE_URL:-http://localhost:3000}
+      # Internal URL for server-side requests (SSR) - reaches Kong via Docker network
+      - SUPABASE_URL_INTERNAL=http://kong:8000
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+    depends_on:
+      kong:
+        condition: service_started
+    networks:
+      - schnittwerk-network
+
+  # ===========================================
+  # Supabase Services
+  # ===========================================
+
+  # PostgreSQL Database with Supabase extensions
+  db:
+    image: public.ecr.aws/supabase/postgres:15.8.1.085
+    container_name: schnittwerk-db
+    restart: unless-stopped
+    ports:
+      - "54322:5432"
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+      - -c
+      - log_min_messages=fatal
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: 5432
+      POSTGRES_PORT: 5432
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATABASE: postgres
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      JWT_EXP: 3600
+    volumes:
+      - schnittwerk_db_data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d/migrations:ro
+      - ./supabase/seed.sql:/docker-entrypoint-initdb.d/zz_seed.sql:ro
+    healthcheck:
+      test: pg_isready -U postgres -h localhost
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - schnittwerk-network
+
+  # Kong API Gateway
+  kong:
+    image: public.ecr.aws/supabase/kong:2.8.1
+    container_name: schnittwerk-kong
+    restart: unless-stopped
+    ports:
+      - "54321:8000"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      DASHBOARD_USERNAME: supabase
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-this_password_is_insecure_and_should_be_updated}
+    volumes:
+      - ./supabase/kong.yml:/home/kong/kong.yml.template:ro
+    entrypoint: ["/bin/sh", "-c", "sed 's|$${ANON_KEY}|'\"$$ANON_KEY\"'|g; s|$${SERVICE_ROLE_KEY}|'\"$$SERVICE_ROLE_KEY\"'|g' /home/kong/kong.yml.template > /home/kong/kong.yml && /docker-entrypoint.sh kong docker-start"]
+    depends_on:
+      auth:
+        condition: service_healthy
+    networks:
+      - schnittwerk-network
+
+  # Supabase Auth (GoTrue)
+  auth:
+    image: public.ecr.aws/supabase/gotrue:v2.183.0
+    container_name: schnittwerk-auth
+    restart: unless-stopped
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: http://localhost:54321
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:-postgres}@db:5432/postgres
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
+      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${ENABLE_EMAIL_SIGNUP:-true}
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: ${ENABLE_ANONYMOUS_USERS:-false}
+      GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - schnittwerk-network
+
+  # PostgREST - RESTful API
+  rest:
+    image: public.ecr.aws/supabase/postgrest:v13.0.7
+    container_name: schnittwerk-rest
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD:-postgres}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public,storage,graphql_public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY:-3600}
+    command: postgrest
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - schnittwerk-network
+
+  # Realtime - Postgres Changes via WebSocket
+  realtime:
+    image: public.ecr.aws/supabase/realtime:v2.65.3
+    container_name: schnittwerk-realtime
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      APP_NAME: realtime
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: postgres
+      DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
+      DB_ENC_KEY: supabaserealtime
+      API_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-UpNVntn3cDxHJpq99YMc1T1AQgQpc8kfYTuRgBiYa15BLrx8etQoXz3gZv1/u2oq}
+      ERL_AFLAGS: -proto_dist inet_tcp
+      DNS_NODES: "''"
+      RLIMIT_NOFILE: 10000
+      TENANT_EXTERNAL_URL: http://localhost:54321
+      REPLICATION_MODE: RLS
+      REPLICATION_POLL_INTERVAL: 100
+      SECURE_CHANNELS: "true"
+      SLOT_NAME: realtime_rls
+      TEMPORARY_SLOT: "true"
+    command: sh -c "/app/bin/migrate && /app/bin/realtime eval 'Realtime.Release.seeds(Realtime.Repo)' && /app/bin/server"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - schnittwerk-network
+
+  # Storage API
+  storage:
+    image: public.ecr.aws/supabase/storage-api:v1.32.0
+    container_name: schnittwerk-storage
+    restart: unless-stopped
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD:-postgres}@db:5432/postgres
+      FILE_SIZE_LIMIT: 52428800
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: local
+      GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: "true"
+      IMGPROXY_URL: http://imgproxy:8080
+    volumes:
+      - schnittwerk_storage_data:/var/lib/storage
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
+      imgproxy:
+        condition: service_started
+    networks:
+      - schnittwerk-network
+
+  # Image Transformation
+  imgproxy:
+    image: public.ecr.aws/supabase/imgproxy:v3.8.0
+    container_name: schnittwerk-imgproxy
+    restart: unless-stopped
+    environment:
+      IMGPROXY_BIND: :8080
+      IMGPROXY_LOCAL_FILESYSTEM_ROOT: /
+      IMGPROXY_USE_ETAG: "true"
+      IMGPROXY_ENABLE_WEBP_DETECTION: "true"
+    volumes:
+      - schnittwerk_storage_data:/var/lib/storage:ro
+    healthcheck:
+      test: ["CMD", "imgproxy", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - schnittwerk-network
+
+  # Postgres Meta (for Studio)
+  meta:
+    image: public.ecr.aws/supabase/postgres-meta:v0.93.1
+    container_name: schnittwerk-meta
+    restart: unless-stopped
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: supabase_admin
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - schnittwerk-network
+
+  # Supabase Studio (Admin UI)
+  studio:
+    image: public.ecr.aws/supabase/studio:2025.11.25-sha-8de52c4
+    container_name: schnittwerk-studio
+    restart: unless-stopped
+    ports:
+      - "54323:3000"
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DEFAULT_ORGANIZATION_NAME: SCHNITTWERK
+      DEFAULT_PROJECT_NAME: schnittwerk-local
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_PUBLIC_URL: http://localhost:54321
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      AUTH_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      LOGFLARE_API_KEY: ""
+      LOGFLARE_URL: http://localhost:4000
+      NEXT_PUBLIC_ENABLE_LOGS: false
+      NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
+    depends_on:
+      db:
+        condition: service_healthy
+      meta:
+        condition: service_started
+    networks:
+      - schnittwerk-network
+
+volumes:
+  schnittwerk_db_data:
+    driver: local
+  schnittwerk_storage_data:
+    driver: local
+
+networks:
+  schnittwerk-network:
+    driver: bridge
