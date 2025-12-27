@@ -29,6 +29,4 @@ export const env = {
   resendApiKey: getEnvVar('RESEND_API_KEY', false),
   emailFrom: getEnvVar('EMAIL_FROM', false) || 'noreply@schnittwerk.ch',
 
-  // Sentry
-  sentryDsn: getEnvVar('NEXT_PUBLIC_SENTRY_DSN', false),
 } as const;
