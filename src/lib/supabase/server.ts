@@ -7,7 +7,7 @@ import type { Database } from '@/lib/db/types';
 // ============================================
 
 export async function createServerClient() {
-  // Use internal URL for Docker (server-side), fall back to public URL
+  // Use internal URL for API calls (Docker network), public URL as fallback
   const supabaseUrl = process.env.SUPABASE_URL_INTERNAL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -34,6 +34,10 @@ export async function createServerClient() {
           // user sessions.
         }
       },
+    },
+    // Use consistent cookie name matching the browser client
+    cookieOptions: {
+      name: 'sb-localhost-auth-token',
     },
   });
 }

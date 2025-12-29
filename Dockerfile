@@ -58,6 +58,10 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Copy entrypoint script for admin user initialization
+COPY --chown=nextjs:nodejs docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
+
 USER nextjs
 
 EXPOSE 3000
@@ -65,4 +69,8 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+# Default admin credentials (can be overridden via environment)
+ENV ADMIN_EMAIL="admin@schnittwerk.ch"
+ENV ADMIN_PASSWORD="admin123"
+
+ENTRYPOINT ["./docker-entrypoint.sh"]
