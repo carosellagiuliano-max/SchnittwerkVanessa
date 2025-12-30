@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -30,6 +30,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { features } from '@/lib/config/features';
 
 // ============================================
 // TYPES
@@ -48,6 +49,8 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   roles?: string[];
+  /** Feature flag key - if set, item only shows when feature is enabled */
+  feature?: keyof typeof features;
 }
 
 // ============================================
@@ -74,17 +77,20 @@ const mainNavItems: NavItem[] = [
     label: 'Bestellungen',
     href: '/admin/bestellungen',
     icon: ShoppingBag,
+    feature: 'shopEnabled',
   },
   {
     label: 'Produkte',
     href: '/admin/produkte',
     icon: Package,
+    feature: 'shopEnabled',
   },
   {
     label: 'Inventar',
     href: '/admin/inventar',
     icon: Warehouse,
     roles: ['admin', 'manager', 'hq'],
+    feature: 'shopEnabled',
   },
   {
     label: 'Team',
@@ -152,6 +158,9 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const isAllowed = (item: NavItem) => {
+    // Check feature flag first
+    if (item.feature && !features[item.feature]) return false;
+    // Then check role
     if (!item.roles) return true;
     return item.roles.includes(user.role);
   };

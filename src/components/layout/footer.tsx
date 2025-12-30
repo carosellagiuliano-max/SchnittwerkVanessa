@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { features } from '@/lib/config/features';
 
 // ============================================
 // SALON INFO - TODO: Fetch from database
@@ -40,13 +41,18 @@ const openingHours = [
   { day: 'Sonntag', hours: 'Geschlossen' },
 ];
 
-const quickLinks = [
+const quickLinksConfig = [
   { label: 'Leistungen', href: '/leistungen' },
-  { label: 'Online Termin', href: '/termin-buchen' },
-  { label: 'Shop', href: '/shop' },
-  { label: 'Gutscheine', href: '/shop/gutscheine' },
+  { label: 'Online Termin', href: '/termin-buchen', feature: 'bookingEnabled' as const },
+  { label: 'Shop', href: '/shop', feature: 'shopEnabled' as const },
+  { label: 'Gutscheine', href: '/shop/gutscheine', feature: 'shopEnabled' as const },
   { label: 'Kontakt', href: '/kontakt' },
 ];
+
+// Filter quick links based on feature flags
+const quickLinks = quickLinksConfig.filter(
+  link => !link.feature || features[link.feature]
+);
 
 const legalLinks = [
   { label: 'Impressum', href: '/impressum' },

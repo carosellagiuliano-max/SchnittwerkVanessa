@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { CartButton } from '@/components/shop/cart-drawer';
+import { features } from '@/lib/config/features';
 
 // ============================================
 // TYPES
@@ -25,6 +26,8 @@ interface NavItem {
   label: string;
   href: string;
   external?: boolean;
+  /** Feature flag key - if set, item only shows when feature is enabled */
+  feature?: keyof typeof features;
 }
 
 // ============================================
@@ -32,14 +35,14 @@ interface NavItem {
 // TODO: Fetch from database via salon settings
 // ============================================
 
-const navigation: NavItem[] = [
+const navigationItems: NavItem[] = [
   { label: 'Home', href: '/' },
   { label: 'Leistungen', href: '/leistungen' },
-  { label: 'Galerie', href: '/galerie' },
+  { label: 'Galerie', href: '/galerie', feature: 'galleryEnabled' },
   { label: 'Ueber uns', href: '/ueber-uns' },
   { label: 'Team', href: '/team' },
   { label: 'Kontakt', href: '/kontakt' },
-  { label: 'Shop', href: '/shop' },
+  { label: 'Shop', href: '/shop', feature: 'shopEnabled' },
 ];
 
 // Salon contact info - TODO: Fetch from database
@@ -58,6 +61,12 @@ export function Header() {
   const pathname = usePathname();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Filter navigation based on feature flags
+  const navigation = useMemo(() =>
+    navigationItems.filter(item => !item.feature || features[item.feature]),
+    []
+  );
 
   // Track scroll for header background
   useEffect(() => {
@@ -155,8 +164,8 @@ export function Header() {
               </a>
             </Button>
 
-            {/* Cart */}
-            <CartButton />
+            {/* Cart - only show if shop is enabled */}
+            {features.shopEnabled && <CartButton />}
 
             {/* Login */}
             <Button
@@ -184,8 +193,8 @@ export function Header() {
 
           {/* Mobile Menu */}
           <div className="flex items-center gap-1.5 lg:hidden">
-            {/* Mobile Cart */}
-            <CartButton />
+            {/* Mobile Cart - only show if shop is enabled */}
+            {features.shopEnabled && <CartButton />}
 
             {/* Mobile Menu Trigger */}
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>

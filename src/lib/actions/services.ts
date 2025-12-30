@@ -228,7 +228,7 @@ export async function createService(
   }
 
   // Revalidate cache directly
-  revalidateTag('services', 'max');
+  revalidateTag('services');
 
   return {
     success: true,
@@ -304,7 +304,7 @@ export async function updateService(
   }
 
   // Revalidate cache directly
-  revalidateTag('services', 'max');
+  revalidateTag('services');
 
   return {
     success: true,
@@ -347,7 +347,7 @@ export async function deleteService(
   }
 
   // Revalidate cache directly
-  revalidateTag('services', 'max');
+  revalidateTag('services');
 
   return { success: true, data: true };
 }
@@ -373,7 +373,7 @@ export async function restoreService(
   }
 
   // Revalidate cache directly
-  revalidateTag('services', 'max');
+  revalidateTag('services');
 
   return { success: true, data: true };
 }

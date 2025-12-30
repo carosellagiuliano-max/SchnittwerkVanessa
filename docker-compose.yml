@@ -22,6 +22,10 @@ services:
         - NEXT_PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY}
         - SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
         - NEXT_PUBLIC_SITE_URL=${SITE_URL:-http://localhost:3000}
+        # Feature flags (baked at build time)
+        - NEXT_PUBLIC_FEATURE_SHOP_ENABLED=${NEXT_PUBLIC_FEATURE_SHOP_ENABLED:-true}
+        - NEXT_PUBLIC_FEATURE_BOOKING_ENABLED=${NEXT_PUBLIC_FEATURE_BOOKING_ENABLED:-true}
+        - NEXT_PUBLIC_FEATURE_GALLERY_ENABLED=${NEXT_PUBLIC_FEATURE_GALLERY_ENABLED:-true}
     container_name: schnittwerk-app
     restart: unless-stopped
     environment:
@@ -35,6 +39,10 @@ services:
       - SUPABASE_URL_INTERNAL=http://kong:8000
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      # Feature flags
+      - NEXT_PUBLIC_FEATURE_SHOP_ENABLED=${NEXT_PUBLIC_FEATURE_SHOP_ENABLED:-true}
+      - NEXT_PUBLIC_FEATURE_BOOKING_ENABLED=${NEXT_PUBLIC_FEATURE_BOOKING_ENABLED:-true}
+      - NEXT_PUBLIC_FEATURE_GALLERY_ENABLED=${NEXT_PUBLIC_FEATURE_GALLERY_ENABLED:-true}
     depends_on:
       kong:
         condition: service_started

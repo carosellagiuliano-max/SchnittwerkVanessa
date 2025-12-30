@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { features } from '@/lib/config/features';
 
 // ============================================
 // TYPES
@@ -192,12 +193,14 @@ export function AdminDashboardContent({
           icon={Clock}
           href="/admin/kalender"
         />
-        <StatCard
-          title="Offene Bestellungen"
-          value={stats.pendingOrders}
-          icon={ShoppingBag}
-          href="/admin/bestellungen"
-        />
+        {features.shopEnabled && (
+          <StatCard
+            title="Offene Bestellungen"
+            value={stats.pendingOrders}
+            icon={ShoppingBag}
+            href="/admin/bestellungen"
+          />
+        )}
         <StatCard
           title="Umsatz diesen Monat"
           value={formatCurrency(stats.monthlyRevenue)}
@@ -267,55 +270,57 @@ export function AdminDashboardContent({
         </Card>
 
         {/* Recent Orders */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg">Letzte Bestellungen</CardTitle>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/admin/bestellungen">
-                Alle anzeigen
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {recentOrders.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <ShoppingBag className="h-10 w-10 text-muted-foreground mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  Keine Bestellungen vorhanden
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {recentOrders.map((order) => (
-                  <Link
-                    key={order.id}
-                    href={`/admin/bestellungen/${order.id}`}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">#{order.orderNumber}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {order.customerEmail}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(order.createdAt)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">
-                        {formatCurrency(order.totalCents)}
-                      </p>
-                      <Badge variant="secondary" className="mt-1">
-                        {orderStatusLabels[order.status] || order.status}
-                      </Badge>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {features.shopEnabled && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg">Letzte Bestellungen</CardTitle>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/admin/bestellungen">
+                  Alle anzeigen
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Link>
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {recentOrders.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <ShoppingBag className="h-10 w-10 text-muted-foreground mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    Keine Bestellungen vorhanden
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recentOrders.map((order) => (
+                    <Link
+                      key={order.id}
+                      href={`/admin/bestellungen/${order.id}`}
+                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">#{order.orderNumber}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {order.customerEmail}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(order.createdAt)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium">
+                          {formatCurrency(order.totalCents)}
+                        </p>
+                        <Badge variant="secondary" className="mt-1">
+                          {orderStatusLabels[order.status] || order.status}
+                        </Badge>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Quick Actions */}
@@ -347,28 +352,32 @@ export function AdminDashboardContent({
                 </div>
               </Link>
             </Button>
-            <Button variant="outline" className="justify-start h-auto py-3" asChild>
-              <Link href="/admin/produkte?action=new">
-                <ShoppingBag className="h-4 w-4 mr-2" />
-                <div className="text-left">
-                  <p className="font-medium">Produkt hinzufügen</p>
-                  <p className="text-xs text-muted-foreground">
-                    Neues Produkt erstellen
-                  </p>
-                </div>
-              </Link>
-            </Button>
-            <Button variant="outline" className="justify-start h-auto py-3" asChild>
-              <Link href="/admin/bestellungen">
-                <AlertCircle className="h-4 w-4 mr-2" />
-                <div className="text-left">
-                  <p className="font-medium">Bestellungen prüfen</p>
-                  <p className="text-xs text-muted-foreground">
-                    {stats.pendingOrders} offen
-                  </p>
-                </div>
-              </Link>
-            </Button>
+            {features.shopEnabled && (
+              <>
+                <Button variant="outline" className="justify-start h-auto py-3" asChild>
+                  <Link href="/admin/produkte?action=new">
+                    <ShoppingBag className="h-4 w-4 mr-2" />
+                    <div className="text-left">
+                      <p className="font-medium">Produkt hinzufügen</p>
+                      <p className="text-xs text-muted-foreground">
+                        Neues Produkt erstellen
+                      </p>
+                    </div>
+                  </Link>
+                </Button>
+                <Button variant="outline" className="justify-start h-auto py-3" asChild>
+                  <Link href="/admin/bestellungen">
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    <div className="text-left">
+                      <p className="font-medium">Bestellungen prüfen</p>
+                      <p className="text-xs text-muted-foreground">
+                        {stats.pendingOrders} offen
+                      </p>
+                    </div>
+                  </Link>
+                </Button>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>

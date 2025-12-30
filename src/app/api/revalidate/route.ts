@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    revalidateTag(tag, 'max');
+    revalidateTag(tag);
     console.log('[Revalidate API] Successfully revalidated tag:', tag);
     return NextResponse.json({ revalidated: true, tag });
   } catch (error) {

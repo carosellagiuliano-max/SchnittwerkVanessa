@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import {
   TrendingUp,
   TrendingDown,
@@ -31,6 +30,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { features } from '@/lib/config/features';
 
 // ============================================
 // TYPES
@@ -184,7 +184,10 @@ export function AdminAnalyticsView({
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className={cn(
+        "grid gap-4",
+        features.shopEnabled ? "md:grid-cols-4" : "md:grid-cols-3"
+      )}>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Gesamtumsatz</CardTitle>
@@ -208,18 +211,20 @@ export function AdminAnalyticsView({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Bestellungen</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalOrders}</div>
-            <p className="text-xs text-muted-foreground">
-              Ø {formatPrice(stats.averageOrderValue)} pro Bestellung
-            </p>
-          </CardContent>
-        </Card>
+        {features.shopEnabled && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Bestellungen</CardTitle>
+              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalOrders}</div>
+              <p className="text-xs text-muted-foreground">
+                Ø {formatPrice(stats.averageOrderValue)} pro Bestellung
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -262,62 +267,66 @@ export function AdminAnalyticsView({
       </Card>
 
       {/* Top Products and Services */}
-      <Tabs defaultValue="products" className="space-y-4">
+      <Tabs defaultValue={features.shopEnabled ? "products" : "services"} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="products">
-            <Package className="mr-2 h-4 w-4" />
-            Top Produkte
-          </TabsTrigger>
+          {features.shopEnabled && (
+            <TabsTrigger value="products">
+              <Package className="mr-2 h-4 w-4" />
+              Top Produkte
+            </TabsTrigger>
+          )}
           <TabsTrigger value="services">
             <Scissors className="mr-2 h-4 w-4" />
             Top Services
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="products">
-          <Card>
-            <CardHeader>
-              <CardTitle>Meistverkaufte Produkte</CardTitle>
-              <CardDescription>
-                Nach Umsatz sortiert (letzte 30 Tage)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">#</TableHead>
-                    <TableHead>Produkt</TableHead>
-                    <TableHead className="text-right">Verkauft</TableHead>
-                    <TableHead className="text-right">Umsatz</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {topProducts.length === 0 ? (
+        {features.shopEnabled && (
+          <TabsContent value="products">
+            <Card>
+              <CardHeader>
+                <CardTitle>Meistverkaufte Produkte</CardTitle>
+                <CardDescription>
+                  Nach Umsatz sortiert (letzte 30 Tage)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center">
-                        Keine Verkäufe in diesem Zeitraum
-                      </TableCell>
+                      <TableHead className="w-12">#</TableHead>
+                      <TableHead>Produkt</TableHead>
+                      <TableHead className="text-right">Verkauft</TableHead>
+                      <TableHead className="text-right">Umsatz</TableHead>
                     </TableRow>
-                  ) : (
-                    topProducts.map((product, index) => (
-                      <TableRow key={product.id}>
-                        <TableCell className="font-medium text-muted-foreground">
-                          {index + 1}
-                        </TableCell>
-                        <TableCell className="font-medium">{product.name}</TableCell>
-                        <TableCell className="text-right">{product.totalSold}</TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatPrice(product.revenue)}
+                  </TableHeader>
+                  <TableBody>
+                    {topProducts.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="h-24 text-center">
+                          Keine Verkäufe in diesem Zeitraum
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                    ) : (
+                      topProducts.map((product, index) => (
+                        <TableRow key={product.id}>
+                          <TableCell className="font-medium text-muted-foreground">
+                            {index + 1}
+                          </TableCell>
+                          <TableCell className="font-medium">{product.name}</TableCell>
+                          <TableCell className="text-right">{product.totalSold}</TableCell>
+                          <TableCell className="text-right font-medium">
+                            {formatPrice(product.revenue)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="services">
           <Card>
