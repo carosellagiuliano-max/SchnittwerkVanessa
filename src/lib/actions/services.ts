@@ -1,6 +1,7 @@
 'use server';
 
 import { createServerClient } from '@/lib/db/client';
+import { revalidateTag } from 'next/cache';
 
 // ============================================
 // SERVICE MANAGEMENT SERVER ACTIONS
@@ -226,12 +227,8 @@ export async function createService(
     return { success: false, error: 'Fehler beim Erstellen der Leistung' };
   }
 
-  // Revalidate cache - call API route for proper cache invalidation
-  try {
-    await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/revalidate?tag=services`, { method: 'POST' });
-  } catch (e) {
-    console.error('Cache revalidation failed:', e);
-  }
+  // Revalidate cache directly
+  revalidateTag('services', 'max');
 
   return {
     success: true,
@@ -306,12 +303,8 @@ export async function updateService(
     return { success: false, error: 'Fehler beim Aktualisieren der Leistung' };
   }
 
-  // Revalidate cache - call API route for proper cache invalidation
-  try {
-    await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/revalidate?tag=services`, { method: 'POST' });
-  } catch (e) {
-    console.error('Cache revalidation failed:', e);
-  }
+  // Revalidate cache directly
+  revalidateTag('services', 'max');
 
   return {
     success: true,
@@ -353,12 +346,8 @@ export async function deleteService(
     return { success: false, error: 'Fehler beim Löschen der Leistung' };
   }
 
-  // Revalidate cache - call API route for proper cache invalidation
-  try {
-    await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/revalidate?tag=services`, { method: 'POST' });
-  } catch (e) {
-    console.error('Cache revalidation failed:', e);
-  }
+  // Revalidate cache directly
+  revalidateTag('services', 'max');
 
   return { success: true, data: true };
 }
@@ -383,12 +372,8 @@ export async function restoreService(
     return { success: false, error: 'Fehler beim Wiederherstellen der Leistung' };
   }
 
-  // Revalidate cache - call API route for proper cache invalidation
-  try {
-    await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/revalidate?tag=services`, { method: 'POST' });
-  } catch (e) {
-    console.error('Cache revalidation failed:', e);
-  }
+  // Revalidate cache directly
+  revalidateTag('services', 'max');
 
   return { success: true, data: true };
 }
