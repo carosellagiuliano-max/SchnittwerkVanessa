@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { AdminSettingsView } from '@/components/admin/admin-settings-view';
 
 // ============================================
@@ -15,7 +15,22 @@ export const metadata: Metadata = {
 // ============================================
 
 async function getSettingsData() {
-  const supabase = await createServerClient();
+  const supabase = createServiceRoleClient();
+
+  if (!supabase) {
+    console.error('Supabase client not available');
+    return {
+      salon: null,
+      services: [],
+      categories: [],
+      openingHours: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+        dayOfWeek,
+        openTime: '09:00',
+        closeTime: '18:00',
+        isOpen: dayOfWeek !== 0,
+      })),
+    };
+  }
 
   // Get salon settings
   const { data: salonData } = await supabase
