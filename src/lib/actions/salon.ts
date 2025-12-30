@@ -95,6 +95,11 @@ export const getSalon = unstable_cache(
   async (salonId: string = DEFAULT_SALON_ID): Promise<Salon | null> => {
     const supabase = createServerClient();
 
+    // Return null during build if Supabase is not available
+    if (!supabase) {
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('salons')
       .select('*')
@@ -136,6 +141,11 @@ export const getOpeningHours = unstable_cache(
   async (salonId: string = DEFAULT_SALON_ID): Promise<OpeningHour[]> => {
     const supabase = createServerClient();
 
+    // Return empty array during build if Supabase is not available
+    if (!supabase) {
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('opening_hours')
       .select('*')
@@ -166,6 +176,11 @@ export const getOpeningHours = unstable_cache(
 export const getServicesWithCategories = unstable_cache(
   async (salonId: string = DEFAULT_SALON_ID): Promise<ServiceCategory[]> => {
     const supabase = createServerClient();
+
+    // Return empty array during build if Supabase is not available
+    if (!supabase) {
+      return [];
+    }
 
     // Get categories
     const { data: categories, error: catError } = await supabase
@@ -258,6 +273,11 @@ export const getAddonServices = unstable_cache(
   async (salonId: string = DEFAULT_SALON_ID): Promise<AddonService[]> => {
     const supabase = createServerClient();
 
+    // Return empty array during build if Supabase is not available
+    if (!supabase) {
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('addon_services')
       .select('*')
@@ -324,6 +344,10 @@ export async function updateOpeningHours(
   salonId: string = DEFAULT_SALON_ID
 ): Promise<UpdateOpeningHoursResult> {
   const supabase = createServerClient();
+
+  if (!supabase) {
+    return { success: false, error: 'Database connection not available' };
+  }
 
   try {
     // Update each day's opening hours using upsert

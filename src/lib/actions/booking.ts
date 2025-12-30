@@ -42,6 +42,11 @@ export const getBookingPageData = unstable_cache(
   async (salonId: string = DEFAULT_SALON_ID): Promise<BookingPageData | null> => {
     const supabase = createServerClient();
 
+    if (!supabase) {
+      console.error('getBookingPageData: Supabase client not available');
+      return null;
+    }
+
     // Fetch salon
     const { data: salon } = await supabase
       .from('salons')

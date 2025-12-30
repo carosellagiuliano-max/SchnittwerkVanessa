@@ -1,12 +1,12 @@
-# SCHNITTWERK - Complete Docker Compose Stack
+# SCHNITTWERK - Docker Compose Stack (DEVELOPMENT)
 # Includes: Next.js App + Supabase (Postgres, Auth, Storage, Realtime, Studio)
-# Run with: docker compose up -d
+# Run with: docker compose -f docker-compose.dev.yml up -d
 #
-# No ports exposed - use external Nginx reverse proxy
-# Internal services (accessible via Docker network):
-# - App:      schnittwerk-app:3000
-# - Supabase: schnittwerk-kong:8000
-# - Studio:   schnittwerk-studio:3000
+# EXPOSED PORTS for local development:
+# - App:      http://localhost:3000
+# - Supabase: http://localhost:54321
+# - Studio:   http://localhost:54323
+# - Postgres: localhost:54322
 
 services:
   # ===========================================
@@ -24,6 +24,8 @@ services:
         - NEXT_PUBLIC_SITE_URL=${SITE_URL:-http://localhost:3000}
     container_name: schnittwerk-app
     restart: unless-stopped
+    ports:
+      - "3000:3000"
     environment:
       - NODE_ENV=production
       # Browser URL (also set at runtime for any dynamic usage)
@@ -50,6 +52,8 @@ services:
     image: public.ecr.aws/supabase/postgres:15.8.1.085
     container_name: schnittwerk-db
     restart: unless-stopped
+    ports:
+      - "54322:5432"
     command:
       - postgres
       - -c
@@ -83,6 +87,8 @@ services:
     image: public.ecr.aws/supabase/kong:2.8.1
     container_name: schnittwerk-kong
     restart: unless-stopped
+    ports:
+      - "54321:8000"
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
@@ -270,6 +276,8 @@ services:
     image: public.ecr.aws/supabase/studio:2025.11.25-sha-8de52c4
     container_name: schnittwerk-studio
     restart: unless-stopped
+    ports:
+      - "54323:3000"
     environment:
       STUDIO_PG_META_URL: http://meta:8080
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}

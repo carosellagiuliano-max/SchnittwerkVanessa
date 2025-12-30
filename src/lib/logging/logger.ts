@@ -1,5 +1,3 @@
-import * as Sentry from '@sentry/nextjs';
-
 // ============================================
 // TYPES
 // ============================================
@@ -134,14 +132,6 @@ export const logger = {
         context,
       };
       console.warn(formatLogEntry(entry));
-
-      // Also send to Sentry as breadcrumb
-      Sentry.addBreadcrumb({
-        category: 'warning',
-        message,
-        level: 'warning',
-        data: context,
-      });
     }
   },
 
@@ -162,19 +152,6 @@ export const logger = {
         } : undefined,
       };
       console.error(formatLogEntry(entry));
-
-      // Send to Sentry
-      if (error) {
-        Sentry.withScope((scope) => {
-          if (context) {
-            scope.setExtras(context as Record<string, unknown>);
-            if (context.salonId) scope.setTag('salon_id', context.salonId);
-            if (context.userId) scope.setTag('user_id', context.userId);
-            if (context.requestId) scope.setTag('request_id', context.requestId);
-          }
-          Sentry.captureException(error);
-        });
-      }
     }
   },
 
@@ -199,14 +176,6 @@ export const logger = {
    */
   event(eventName: string, context?: LogContext) {
     this.info(`EVENT: ${eventName}`, { ...context, action: eventName });
-
-    // Add Sentry breadcrumb for business events
-    Sentry.addBreadcrumb({
-      category: 'business',
-      message: eventName,
-      level: 'info',
-      data: context,
-    });
   },
 
   /**

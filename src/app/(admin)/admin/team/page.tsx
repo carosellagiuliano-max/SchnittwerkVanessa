@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { AdminTeamView } from '@/components/admin/admin-team-view';
 
 // ============================================
@@ -34,7 +34,12 @@ interface WorkingHour {
 // ============================================
 
 async function getTeamData() {
-  const supabase = await createServerClient();
+  const supabase = createServiceRoleClient();
+
+  if (!supabase) {
+    console.error('Supabase client not available');
+    return { staff: [], services: [], absences: [], skills: [] as StaffSkill[], workingHours: [] as WorkingHour[] };
+  }
 
   // Fetch staff members
   const { data: staffData, error } = await supabase

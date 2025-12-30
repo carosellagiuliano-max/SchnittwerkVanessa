@@ -4,6 +4,9 @@ import { getBookingPageData } from '@/lib/actions';
 import { Card, CardContent } from '@/components/ui/card';
 import { AlertCircle } from 'lucide-react';
 
+// Force dynamic rendering - database not available during build
+export const dynamic = 'force-dynamic';
+
 // ============================================
 // METADATA
 // ============================================

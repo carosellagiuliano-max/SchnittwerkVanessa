@@ -10,7 +10,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Use 'max' as second argument (Next.js 16+ requirement)
     revalidateTag(tag, 'max');
     console.log('[Revalidate API] Successfully revalidated tag:', tag);
     return NextResponse.json({ revalidated: true, tag });

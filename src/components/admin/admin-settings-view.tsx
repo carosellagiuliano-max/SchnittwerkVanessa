@@ -1157,16 +1157,16 @@ export function AdminSettingsView({ salon, services, categories, openingHours: i
             <div className="space-y-2">
               <Label htmlFor="serviceCategory">Kategorie</Label>
               <Select
-                value={serviceForm.categoryId}
+                value={serviceForm.categoryId || 'none'}
                 onValueChange={(value) =>
-                  setServiceForm({ ...serviceForm, categoryId: value })
+                  setServiceForm({ ...serviceForm, categoryId: value === 'none' ? '' : value })
                 }
               >
                 <SelectTrigger id="serviceCategory">
                   <SelectValue placeholder="Kategorie auswählen" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Keine Kategorie</SelectItem>
+                  <SelectItem value="none">Keine Kategorie</SelectItem>
                   {categories.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       {cat.name}

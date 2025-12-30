@@ -15,9 +15,9 @@ export const env = {
   isProduction: process.env.NODE_ENV === 'production',
   isDevelopment: process.env.NODE_ENV === 'development',
 
-  // Supabase
-  supabaseUrl: getEnvVar('NEXT_PUBLIC_SUPABASE_URL'),
-  supabaseAnonKey: getEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY'),
+  // Supabase (not required at build time for Docker compatibility)
+  supabaseUrl: getEnvVar('NEXT_PUBLIC_SUPABASE_URL', false),
+  supabaseAnonKey: getEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY', false),
   supabaseServiceRoleKey: getEnvVar('SUPABASE_SERVICE_ROLE_KEY', false),
 
   // Stripe
@@ -29,6 +29,4 @@ export const env = {
   resendApiKey: getEnvVar('RESEND_API_KEY', false),
   emailFrom: getEnvVar('EMAIL_FROM', false) || 'noreply@schnittwerk.ch',
 
-  // Sentry
-  sentryDsn: getEnvVar('NEXT_PUBLIC_SENTRY_DSN', false),
 } as const;

@@ -106,13 +106,27 @@ export default async function AdminLayout({
   // ========== REAL MODE (Supabase) ==========
   // Check authentication
   const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (!supabase) {
+    console.error('[AdminLayout] Supabase client is null - env vars missing?');
     redirect('/admin/login');
   }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError) {
+    console.error('[AdminLayout] Auth error:', authError.message);
+  }
+
+  if (!user) {
+    console.log('[AdminLayout] No user found, redirecting to login');
+    redirect('/admin/login');
+  }
+
+  console.log('[AdminLayout] User authenticated:', user.email);
 
   // Check if user is active staff member or admin
   const { data: staffMember } = await supabase

@@ -7,6 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { createServerClient } from '@/lib/supabase/server';
 import { AddToCartButton } from '@/components/shop/add-to-cart-button';
 
+// Force dynamic rendering - database not available during build
+export const dynamic = 'force-dynamic';
+
 // ============================================
 // METADATA
 // ============================================

@@ -230,6 +230,17 @@ export function AdminTeamView({
     employment_type: 'full_time',
   });
 
+  // Edit Staff Dialog
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingStaff, setEditingStaff] = useState({
+    display_name: '',
+    email: '',
+    phone: '',
+    role: 'staff',
+    color: '#3b82f6',
+    employment_type: 'full_time',
+  });
+
   const [isSaving, setIsSaving] = useState(false);
 
   const activeStaff = staff.filter((s) => s.is_active);
@@ -484,6 +495,59 @@ export function AdminTeamView({
     }
   };
 
+  // Open edit dialog
+  const openEditDialog = (member: StaffMember) => {
+    setSelectedMember(member);
+    setEditingStaff({
+      display_name: member.display_name,
+      email: member.email || '',
+      phone: member.phone || '',
+      role: member.role,
+      color: member.color || '#3b82f6',
+      employment_type: member.employment_type || 'full_time',
+    });
+    setEditDialogOpen(true);
+  };
+
+  // Save edited staff member
+  const handleEditStaff = async () => {
+    if (!selectedMember) return;
+    if (!editingStaff.display_name.trim()) {
+      toast.error('Bitte geben Sie einen Namen ein');
+      return;
+    }
+
+    setIsSaving(true);
+    const supabase = createBrowserClient();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from('staff') as any)
+      .update({
+        display_name: editingStaff.display_name.trim(),
+        email: editingStaff.email.trim() || null,
+        phone: editingStaff.phone.trim() || null,
+        role: editingStaff.role,
+        color: editingStaff.color,
+        employment_type: editingStaff.employment_type,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', selectedMember.id);
+
+    if (error) {
+      console.error('Error updating staff:', error);
+      toast.error('Fehler beim Aktualisieren des Mitarbeiters');
+    } else {
+      toast.success('Mitarbeiter aktualisiert');
+      setEditDialogOpen(false);
+      // Invalidate caches
+      fetch('/api/revalidate?tag=booking', { method: 'POST' }).catch(() => {});
+      fetch('/api/revalidate?tag=staff', { method: 'POST' }).catch(() => {});
+      router.refresh();
+    }
+
+    setIsSaving(false);
+  };
+
   // Add new staff member
   const handleAddStaff = async () => {
     if (!newStaff.display_name.trim()) {
@@ -607,7 +671,7 @@ export function AdminTeamView({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEditDialog(member)}>
                             <Edit className="h-4 w-4 mr-2" />
                             Bearbeiten
                           </DropdownMenuItem>
@@ -1147,6 +1211,116 @@ export function AdminTeamView({
             </Button>
             <Button onClick={handleAddStaff} disabled={isSaving}>
               {isSaving ? 'Speichern...' : 'Hinzufügen'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Staff Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mitarbeiter bearbeiten</DialogTitle>
+            <DialogDescription>
+              Bearbeiten Sie die Daten des Mitarbeiters
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="editStaffName">Name *</Label>
+              <Input
+                id="editStaffName"
+                value={editingStaff.display_name}
+                onChange={(e) =>
+                  setEditingStaff({ ...editingStaff, display_name: e.target.value })
+                }
+                placeholder="Vor- und Nachname"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editStaffEmail">E-Mail</Label>
+              <Input
+                id="editStaffEmail"
+                type="email"
+                value={editingStaff.email}
+                onChange={(e) =>
+                  setEditingStaff({ ...editingStaff, email: e.target.value })
+                }
+                placeholder="email@beispiel.ch"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editStaffPhone">Telefon</Label>
+              <Input
+                id="editStaffPhone"
+                type="tel"
+                value={editingStaff.phone}
+                onChange={(e) =>
+                  setEditingStaff({ ...editingStaff, phone: e.target.value })
+                }
+                placeholder="+41 79 123 45 67"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="editStaffRole">Rolle</Label>
+                <Select
+                  value={editingStaff.role}
+                  onValueChange={(value) =>
+                    setEditingStaff({ ...editingStaff, role: value })
+                  }
+                >
+                  <SelectTrigger id="editStaffRole">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="staff">Mitarbeiter</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="admin">Administrator</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editStaffEmployment">Anstellung</Label>
+                <Select
+                  value={editingStaff.employment_type}
+                  onValueChange={(value) =>
+                    setEditingStaff({ ...editingStaff, employment_type: value })
+                  }
+                >
+                  <SelectTrigger id="editStaffEmployment">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full_time">Vollzeit</SelectItem>
+                    <SelectItem value="part_time">Teilzeit</SelectItem>
+                    <SelectItem value="contractor">Freelancer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editStaffColor">Farbe (für Kalender)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="editStaffColor"
+                  type="color"
+                  value={editingStaff.color}
+                  onChange={(e) =>
+                    setEditingStaff({ ...editingStaff, color: e.target.value })
+                  }
+                  className="w-16 h-10 p-1 cursor-pointer"
+                />
+                <span className="text-sm text-muted-foreground">{editingStaff.color}</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleEditStaff} disabled={isSaving}>
+              {isSaving ? 'Speichern...' : 'Speichern'}
             </Button>
           </DialogFooter>
         </DialogContent>
