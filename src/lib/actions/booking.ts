@@ -426,6 +426,15 @@ export async function createAppointmentReservation(
     // Create appointment with reserved status
     const reservationExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 min reservation
 
+    console.log('[Booking] Creating appointment with:', {
+      salon_id: request.salonId,
+      staff_id: request.staffId,
+      customer_id: request.customerId || null,
+      start_time: request.startsAt.toISOString(),
+      end_time: endsAt.toISOString(),
+      customer_name: request.customerName,
+    });
+
     const { data: appointment, error: appointmentError } = await supabase
       .from('appointments')
       .insert({
@@ -449,6 +458,8 @@ export async function createAppointmentReservation(
       })
       .select('id')
       .single();
+
+    console.log('[Booking] Insert result:', { appointment, error: appointmentError });
 
     if (appointmentError || !appointment) {
       // Check if it's a unique constraint violation (double booking)
@@ -753,6 +764,240 @@ export type CompleteResult = {
   success: boolean;
   error?: string;
 };
+
+// ============================================
+// ADMIN UPDATE APPOINTMENT TIME
+// ============================================
+
+export type AdminUpdateTimeResult = {
+  success: boolean;
+  error?: string;
+};
+
+export async function adminUpdateAppointmentTime(
+  appointmentId: string,
+  startTime: string,
+  endTime: string,
+  durationMinutes?: number
+): Promise<AdminUpdateTimeResult> {
+  const supabase = createServerClient();
+
+  if (!supabase) {
+    return { success: false, error: 'Database nicht verfügbar' };
+  }
+
+  try {
+    const updateData: Record<string, unknown> = {
+      start_time: startTime,
+      end_time: endTime,
+    };
+
+    if (durationMinutes !== undefined) {
+      updateData.duration_minutes = durationMinutes;
+    }
+
+    const { error } = await supabase
+      .from('appointments')
+      .update(updateData)
+      .eq('id', appointmentId);
+
+    if (error) {
+      console.error('[adminUpdateAppointmentTime] Error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('[adminUpdateAppointmentTime] Exception:', err);
+    return { success: false, error: 'Unbekannter Fehler' };
+  }
+}
+
+// ============================================
+// ADMIN CANCEL APPOINTMENT
+// ============================================
+
+export type AdminCancelResult = {
+  success: boolean;
+  error?: string;
+};
+
+export async function adminCancelAppointment(
+  appointmentId: string
+): Promise<AdminCancelResult> {
+  const supabase = createServerClient();
+
+  if (!supabase) {
+    return { success: false, error: 'Database nicht verfügbar' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('appointments')
+      .update({
+        status: 'cancelled',
+        cancelled_at: new Date().toISOString(),
+      })
+      .eq('id', appointmentId);
+
+    if (error) {
+      console.error('[adminCancelAppointment] Error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('[adminCancelAppointment] Exception:', err);
+    return { success: false, error: 'Unbekannter Fehler' };
+  }
+}
+
+// ============================================
+// ADMIN CONFIRM APPOINTMENT
+// ============================================
+
+export type AdminConfirmResult = {
+  success: boolean;
+  error?: string;
+};
+
+export async function adminConfirmAppointment(
+  appointmentId: string
+): Promise<AdminConfirmResult> {
+  const supabase = createServerClient();
+
+  if (!supabase) {
+    return { success: false, error: 'Database nicht verfügbar' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('appointments')
+      .update({
+        status: 'confirmed',
+        confirmed_at: new Date().toISOString(),
+      })
+      .eq('id', appointmentId);
+
+    if (error) {
+      console.error('[adminConfirmAppointment] Error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('[adminConfirmAppointment] Exception:', err);
+    return { success: false, error: 'Unbekannter Fehler' };
+  }
+}
+
+// ============================================
+// GET APPOINTMENTS FOR ADMIN CALENDAR
+// ============================================
+
+export interface AdminCalendarAppointment {
+  id: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  notes: string | null;
+  booking_number: string | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  customer: {
+    id: string;
+    first_name: string;
+    last_name: string;
+  } | null;
+  appointment_services: {
+    service_id: string;
+    service_name: string;
+    duration_minutes: number;
+  }[];
+  staff: {
+    id: string;
+    display_name: string;
+    color: string | null;
+  } | null;
+}
+
+export async function getAdminCalendarAppointments(
+  salonId: string,
+  startDate: string,
+  endDate: string,
+  staffIds: string[]
+): Promise<AdminCalendarAppointment[]> {
+  const supabase = createServerClient();
+
+  if (!supabase) {
+    console.error('[getAdminCalendarAppointments] Supabase client not available');
+    return [];
+  }
+
+  console.log('[getAdminCalendarAppointments] Fetching:', { salonId, startDate, endDate, staffIds });
+
+  const { data, error } = await supabase
+    .from('appointments')
+    .select(`
+      id,
+      start_time,
+      end_time,
+      status,
+      notes,
+      booking_number,
+      customer_name,
+      customer_email,
+      customer_phone,
+      customers (
+        id,
+        first_name,
+        last_name
+      ),
+      appointment_services (
+        service_id,
+        service_name,
+        duration_minutes
+      ),
+      staff (
+        id,
+        display_name,
+        color
+      )
+    `)
+    .eq('salon_id', salonId)
+    .gte('start_time', startDate)
+    .lte('start_time', endDate)
+    .in('staff_id', staffIds.length > 0 ? staffIds : ['none'])
+    .neq('status', 'cancelled')
+    .order('start_time');
+
+  if (error) {
+    console.error('[getAdminCalendarAppointments] Error:', error);
+    return [];
+  }
+
+  console.log('[getAdminCalendarAppointments] Found', data?.length || 0, 'appointments');
+
+  return (data || []).map((apt: any) => ({
+    id: apt.id,
+    start_time: apt.start_time,
+    end_time: apt.end_time,
+    status: apt.status,
+    notes: apt.notes,
+    booking_number: apt.booking_number,
+    customer_name: apt.customer_name,
+    customer_email: apt.customer_email,
+    customer_phone: apt.customer_phone,
+    customer: apt.customers,
+    appointment_services: apt.appointment_services || [],
+    staff: apt.staff,
+  }));
+}
+
+// ============================================
+// MARK APPOINTMENT AS COMPLETED (Admin)
+// ============================================
 
 export async function markAppointmentCompleted(
   appointmentId: string,

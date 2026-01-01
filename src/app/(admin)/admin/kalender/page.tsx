@@ -14,6 +14,8 @@ export const metadata: Metadata = {
 // DATA FETCHING
 // ============================================
 
+const DEFAULT_SALON_ID = '550e8400-e29b-41d4-a716-446655440001';
+
 async function getCalendarData() {
   const supabase = await createServerClient();
 
@@ -31,7 +33,11 @@ async function getCalendarData() {
     .eq('is_active', true)
     .order('name');
 
+  // Get salonId from first staff member or use default
+  const salonId = staffData?.[0]?.salon_id || DEFAULT_SALON_ID;
+
   return {
+    salonId,
     staff: (staffData || []) as Array<{
       id: string;
       display_name: string;
@@ -54,7 +60,7 @@ async function getCalendarData() {
 // ============================================
 
 export default async function AdminCalendarPage() {
-  const { staff, services } = await getCalendarData();
+  const { salonId, staff, services } = await getCalendarData();
 
-  return <AdminFullCalendar staff={staff} services={services} />;
+  return <AdminFullCalendar salonId={salonId} staff={staff} services={services} />;
 }

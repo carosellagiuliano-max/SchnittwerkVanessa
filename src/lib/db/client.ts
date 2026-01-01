@@ -44,7 +44,7 @@ export const supabase = new Proxy({} as SupabaseClient<Database>, {
 export function createServerClient(): SupabaseClient<Database> | null {
   // Use internal URL for Docker (server-side), fall back to public URL
   const supabaseUrl = process.env.SUPABASE_URL_INTERNAL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY;
 
   // Return null if env vars are not available (safe for build time)
   if (!supabaseUrl || !supabaseServiceKey) {

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { AdminDashboardContent } from '@/components/admin/admin-dashboard-content';
 
 // ============================================
@@ -48,14 +48,15 @@ interface DashboardAppointmentRow {
   start_time: string;
   end_time: string;
   status: string;
+  customer_name: string | null;
   customers: {
     first_name: string;
     last_name: string;
   } | null;
-  services: {
-    name: string;
+  appointment_services: {
+    service_name: string;
     duration_minutes: number;
-  } | null;
+  }[] | null;
   staff: {
     display_name: string;
   } | null;
@@ -79,16 +80,43 @@ interface RecentOrderRow {
 // ============================================
 
 async function getDashboardData() {
-  const supabase = await createServerClient();
+  const supabase = createServiceRoleClient();
+
+  if (!supabase) {
+    console.error('[Dashboard] Service role client not available');
+    return {
+      stats: {
+        todayAppointments: 0,
+        weekAppointments: 0,
+        pendingOrders: 0,
+        monthlyRevenue: 0,
+        newCustomers: 0,
+        cancelledAppointments: 0,
+      },
+      todayAppointments: [],
+      recentOrders: [],
+    };
+  }
+
   const today = new Date();
   const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
   const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
+
+  // Calculate start of week (Monday)
   const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay() + 1);
+  const dayOfWeek = today.getDay();
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday = 0, so 6 days from Monday
+  startOfWeek.setDate(today.getDate() - daysFromMonday);
   startOfWeek.setHours(0, 0, 0, 0);
+
+  // Calculate end of week (Sunday)
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
+
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-  // Get today's appointments
+  // Get today's appointments (using appointment_services for service info)
   const { data: todayAppointmentsData, count: todayCount } = await supabase
     .from('appointments')
     .select(
@@ -97,12 +125,13 @@ async function getDashboardData() {
       start_time,
       end_time,
       status,
+      customer_name,
       customers (
         first_name,
         last_name
       ),
-      services (
-        name,
+      appointment_services (
+        service_name,
         duration_minutes
       ),
       staff (
@@ -113,6 +142,7 @@ async function getDashboardData() {
     )
     .gte('start_time', startOfDay)
     .lte('start_time', endOfDay)
+    .neq('status', 'cancelled')
     .order('start_time', { ascending: true }) as { data: DashboardAppointmentRow[] | null; count: number | null };
 
   // Get week appointments count
@@ -120,7 +150,8 @@ async function getDashboardData() {
     .from('appointments')
     .select('id', { count: 'exact', head: true })
     .gte('start_time', startOfWeek.toISOString())
-    .lte('start_time', endOfDay);
+    .lte('start_time', endOfWeek.toISOString())
+    .neq('status', 'cancelled');
 
   // Get pending orders count
   const { count: pendingOrdersCount } = await supabase
@@ -163,20 +194,30 @@ async function getDashboardData() {
 
   // Transform appointments data
   const todayAppointments: TodayAppointment[] = (todayAppointmentsData || []).map(
-    (apt) => ({
-      id: apt.id,
-      time: new Date(apt.start_time).toLocaleTimeString('de-CH', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-      customerName: apt.customers
+    (apt) => {
+      // Get customer name from linked customer or denormalized field
+      const customerName = apt.customers
         ? `${apt.customers.first_name} ${apt.customers.last_name}`
-        : 'Unbekannt',
-      serviceName: apt.services?.name || 'Unbekannt',
-      staffName: apt.staff?.display_name || 'Unbekannt',
-      status: apt.status as TodayAppointment['status'],
-      duration: apt.services?.duration_minutes || 30,
-    })
+        : apt.customer_name || 'Unbekannt';
+
+      // Get service info from appointment_services
+      const firstService = apt.appointment_services?.[0];
+      const serviceName = firstService?.service_name || 'Unbekannt';
+      const duration = firstService?.duration_minutes || 30;
+
+      return {
+        id: apt.id,
+        time: new Date(apt.start_time).toLocaleTimeString('de-CH', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        customerName,
+        serviceName,
+        staffName: apt.staff?.display_name || 'Unbekannt',
+        status: apt.status as TodayAppointment['status'],
+        duration,
+      };
+    }
   );
 
   // Transform orders data

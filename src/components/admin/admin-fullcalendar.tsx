@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -88,6 +88,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { createBrowserClient } from '@/lib/supabase/client';
+import { getAdminCalendarAppointments, adminCancelAppointment, adminConfirmAppointment, adminUpdateAppointmentTime } from '@/lib/actions';
 import { toast } from 'sonner';
 
 // ============================================
@@ -117,18 +118,22 @@ interface Appointment {
   status: string;
   notes: string | null;
   booking_number: string | null;
+  // Linked customer (via customer_id FK)
   customer: {
     id: string;
     first_name: string;
     last_name: string;
-    email: string | null;
-    phone: string | null;
   } | null;
-  service: {
-    id: string;
-    name: string;
+  // Denormalized customer fields (for online guest bookings)
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  // Services via appointment_services join table
+  appointment_services: {
+    service_id: string;
+    service_name: string;
     duration_minutes: number;
-  } | null;
+  }[] | null;
   staff: {
     id: string;
     display_name: string;
@@ -149,6 +154,7 @@ interface StaffBlock {
 }
 
 interface AdminFullCalendarProps {
+  salonId: string;
   staff: Staff[];
   services: Service[];
 }
@@ -157,8 +163,10 @@ interface Customer {
   id: string;
   first_name: string;
   last_name: string;
-  email: string | null;
-  phone: string | null;
+  profiles: {
+    email: string | null;
+    phone: string | null;
+  } | null;
 }
 
 // Staff colors
@@ -186,7 +194,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 // ADMIN FULLCALENDAR COMPONENT
 // ============================================
 
-export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
+export function AdminFullCalendar({ salonId, staff, services }: AdminFullCalendarProps) {
   const calendarRef = useRef<FullCalendar>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [staffBlocks, setStaffBlocks] = useState<StaffBlock[]>([]);
@@ -237,65 +245,28 @@ export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
     end: Date;
   } | null>(null);
 
-  // Fetch appointments
+  // Fetch appointments using server action (bypasses RLS)
   const fetchAppointments = useCallback(async (start: Date, end: Date) => {
     setIsLoading(true);
-    const supabase = createBrowserClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase
-      .from('appointments') as any)
-      .select(`
-        id,
-        start_time,
-        end_time,
-        status,
-        notes,
-        booking_number,
-        customers (
-          id,
-          first_name,
-          last_name,
-          email,
-          phone
-        ),
-        services (
-          id,
-          name,
-          duration_minutes
-        ),
-        staff (
-          id,
-          display_name,
-          color
-        )
-      `)
-      .gte('start_time', start.toISOString())
-      .lte('start_time', end.toISOString())
-      .in('staff_id', selectedStaff.length > 0 ? selectedStaff : ['none'])
-      .neq('status', 'cancelled')
-      .order('start_time');
+    console.log('[Calendar] Fetching appointments:', { start: start.toISOString(), end: end.toISOString(), selectedStaff, salonId });
 
-    if (!error && data) {
-      setAppointments(
-        data.map((apt: any) => ({
-          id: apt.id,
-          start_time: apt.start_time,
-          end_time: apt.end_time,
-          status: apt.status,
-          notes: apt.notes,
-          booking_number: apt.booking_number,
-          customer: apt.customers,
-          service: apt.services,
-          staff: apt.staff,
-        }))
+    try {
+      const data = await getAdminCalendarAppointments(
+        salonId,
+        start.toISOString(),
+        end.toISOString(),
+        selectedStaff.length > 0 ? selectedStaff : []
       );
-    } else if (error) {
-      console.error('Error fetching appointments:', error);
+
+      console.log('[Calendar] Found', data.length, 'appointments');
+      setAppointments(data);
+    } catch (error) {
+      console.error('[Calendar] Error fetching appointments:', error);
     }
 
     setIsLoading(false);
-  }, [selectedStaff]);
+  }, [selectedStaff, salonId]);
 
   // Fetch staff blocks
   const fetchStaffBlocks = useCallback(async (start: Date, end: Date) => {
@@ -333,11 +304,19 @@ export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
       const staffIndex = staff.findIndex(s => s.id === apt.staff?.id);
       const staffColor = apt.staff?.color || STAFF_COLORS[staffIndex % STAFF_COLORS.length];
 
+      // Get customer name from linked customer or denormalized fields
+      const customerName = apt.customer
+        ? `${apt.customer.first_name} ${apt.customer.last_name}`
+        : apt.customer_name || 'Unbekannter Kunde';
+
+      // Get service name from appointment_services
+      const serviceName = apt.appointment_services && apt.appointment_services.length > 0
+        ? apt.appointment_services.map(s => s.service_name).join(', ')
+        : 'Unbekannt';
+
       return {
         id: apt.id,
-        title: apt.customer
-          ? `${apt.customer.first_name} ${apt.customer.last_name}`
-          : 'Unbekannter Kunde',
+        title: customerName,
         start: apt.start_time,
         end: apt.end_time,
         backgroundColor: staffColor,
@@ -345,7 +324,7 @@ export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
         extendedProps: {
           type: 'appointment',
           appointment: apt,
-          serviceName: apt.service?.name || 'Unbekannt',
+          serviceName,
           staffName: apt.staff?.display_name || 'Unbekannt',
           status: apt.status,
         },
@@ -400,24 +379,16 @@ export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
     const startDate = info.start;
     const endDate = info.end;
 
+    // Show selection type dialog (appointment or block)
     setPendingSelection({ start: startDate, end: endDate });
     setIsSelectionTypeOpen(true);
   };
 
-  // Handle double-click on calendar
-  const handleDateClick = (info: DateClickArg) => {
-    // Double click opens appointment dialog directly
-    const startDate = info.date;
-    const endDate = addMinutes(startDate, 60); // Default 1 hour
-
-    setNewAppointmentForm(prev => ({
-      ...prev,
-      date: format(startDate, 'yyyy-MM-dd'),
-      startTime: format(startDate, 'HH:mm'),
-      endTime: format(endDate, 'HH:mm'),
-      staffId: staff[0]?.id || '',
-    }));
-    setIsNewAppointmentOpen(true);
+  // Handle single click on calendar - disabled to avoid conflict with select
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleDateClick = (_info: DateClickArg) => {
+    // Do nothing - selection is handled by handleDateSelect
+    // This prevents both dialogs from opening on the same click
   };
 
   // Handle selection type choice
@@ -463,22 +434,18 @@ export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
     }
 
     try {
-      const supabase = createBrowserClient();
-
       if (eventType === 'appointment') {
         const appointmentId = info.event.id;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase
-          .from('appointments') as any)
-          .update({
-            start_time: newStart.toISOString(),
-            end_time: newEnd.toISOString(),
-          })
-          .eq('id', appointmentId);
+        const result = await adminUpdateAppointmentTime(
+          appointmentId,
+          newStart.toISOString(),
+          newEnd.toISOString()
+        );
 
-        if (error) throw error;
+        if (!result.success) throw new Error(result.error);
         toast.success('Termin verschoben');
       } else if (eventType === 'block') {
+        const supabase = createBrowserClient();
         const blockId = info.event.id.replace('block-', '');
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error } = await (supabase
@@ -511,23 +478,20 @@ export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
     }
 
     try {
-      const supabase = createBrowserClient();
-
       if (eventType === 'appointment') {
         const appointmentId = info.event.id;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase
-          .from('appointments') as any)
-          .update({
-            start_time: newStart.toISOString(),
-            end_time: newEnd.toISOString(),
-            duration_minutes: Math.round((newEnd.getTime() - newStart.getTime()) / 60000),
-          })
-          .eq('id', appointmentId);
+        const durationMinutes = Math.round((newEnd.getTime() - newStart.getTime()) / 60000);
+        const result = await adminUpdateAppointmentTime(
+          appointmentId,
+          newStart.toISOString(),
+          newEnd.toISOString(),
+          durationMinutes
+        );
 
-        if (error) throw error;
+        if (!result.success) throw new Error(result.error);
         toast.success('Terminzeit geändert');
       } else if (eventType === 'block') {
+        const supabase = createBrowserClient();
         const blockId = info.event.id.replace('block-', '');
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error } = await (supabase
@@ -559,11 +523,15 @@ export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
     const supabase = createBrowserClient();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase
+    const { data, error } = await (supabase
       .from('customers') as any)
-      .select('id, first_name, last_name, email, phone')
-      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%`)
+      .select('id, first_name, last_name, profiles (email, phone)')
+      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
       .limit(5);
+
+    if (error) {
+      console.error('Error fetching customers:', error);
+    }
 
     setCustomerResults(data || []);
     setIsSearching(false);
@@ -850,17 +818,11 @@ export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
     if (!selectedAppointment) return;
 
     try {
-      const supabase = createBrowserClient();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase
-        .from('appointments') as any)
-        .update({
-          status: 'cancelled',
-          cancelled_at: new Date().toISOString(),
-        })
-        .eq('id', selectedAppointment.id);
+      const result = await adminCancelAppointment(selectedAppointment.id);
 
-      if (error) throw error;
+      if (!result.success) {
+        throw new Error(result.error);
+      }
 
       toast.success('Termin storniert');
       setIsDetailDialogOpen(false);
@@ -882,17 +844,11 @@ export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
     if (!selectedAppointment) return;
 
     try {
-      const supabase = createBrowserClient();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase
-        .from('appointments') as any)
-        .update({
-          status: 'confirmed',
-          confirmed_at: new Date().toISOString(),
-        })
-        .eq('id', selectedAppointment.id);
+      const result = await adminConfirmAppointment(selectedAppointment.id);
 
-      if (error) throw error;
+      if (!result.success) {
+        throw new Error(result.error);
+      }
 
       toast.success('Termin bestätigt');
       setIsDetailDialogOpen(false);
@@ -1066,13 +1022,16 @@ export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
               }
 
               const apt = eventInfo.event.extendedProps.appointment as Appointment;
+              const serviceName = apt?.appointment_services && apt.appointment_services.length > 0
+                ? apt.appointment_services[0].service_name
+                : 'Unbekannt';
               return (
                 <div className="p-1 overflow-hidden h-full">
                   <div className="font-medium text-xs truncate">
                     {eventInfo.event.title}
                   </div>
                   <div className="text-[10px] opacity-80 truncate">
-                    {apt?.service?.name}
+                    {serviceName}
                   </div>
                 </div>
               );
@@ -1162,30 +1121,34 @@ export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
                     {format(parseISO(selectedAppointment.start_time), 'HH:mm')} - {format(parseISO(selectedAppointment.end_time), 'HH:mm')}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {selectedAppointment.service?.duration_minutes} Minuten
+                    {selectedAppointment.appointment_services && selectedAppointment.appointment_services.length > 0
+                      ? selectedAppointment.appointment_services.reduce((sum, s) => sum + s.duration_minutes, 0)
+                      : 0} Minuten
                   </div>
                 </div>
               </div>
 
               {/* Customer */}
-              {selectedAppointment.customer && (
+              {(selectedAppointment.customer || selectedAppointment.customer_name) && (
                 <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
                   <User className="h-5 w-5 text-muted-foreground" />
                   <div className="flex-1">
                     <div className="font-medium">
-                      {selectedAppointment.customer.first_name} {selectedAppointment.customer.last_name}
+                      {selectedAppointment.customer
+                        ? `${selectedAppointment.customer.first_name} ${selectedAppointment.customer.last_name}`
+                        : selectedAppointment.customer_name}
                     </div>
                     <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                      {selectedAppointment.customer.email && (
+                      {selectedAppointment.customer_email && (
                         <span className="flex items-center gap-1">
                           <Mail className="h-3 w-3" />
-                          {selectedAppointment.customer.email}
+                          {selectedAppointment.customer_email}
                         </span>
                       )}
-                      {selectedAppointment.customer.phone && (
+                      {selectedAppointment.customer_phone && (
                         <span className="flex items-center gap-1">
                           <Phone className="h-3 w-3" />
-                          {selectedAppointment.customer.phone}
+                          {selectedAppointment.customer_phone}
                         </span>
                       )}
                     </div>
@@ -1197,7 +1160,11 @@ export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
               <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
                 <Scissors className="h-5 w-5 text-muted-foreground" />
                 <div>
-                  <div className="font-medium">{selectedAppointment.service?.name}</div>
+                  <div className="font-medium">
+                    {selectedAppointment.appointment_services && selectedAppointment.appointment_services.length > 0
+                      ? selectedAppointment.appointment_services.map(s => s.service_name).join(', ')
+                      : 'Unbekannt'}
+                  </div>
                   <div className="text-sm text-muted-foreground">
                     bei {selectedAppointment.staff?.display_name}
                   </div>
@@ -1279,8 +1246,8 @@ export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
                                 ...prev,
                                 customerId: customer.id,
                                 customerName: `${customer.first_name} ${customer.last_name}`,
-                                customerEmail: customer.email || '',
-                                customerPhone: customer.phone || '',
+                                customerEmail: customer.profiles?.email || '',
+                                customerPhone: customer.profiles?.phone || '',
                                 customerSearch: '',
                               }));
                               setCustomerResults([]);
@@ -1290,16 +1257,16 @@ export function AdminFullCalendar({ staff, services }: AdminFullCalendarProps) {
                               {customer.first_name} {customer.last_name}
                             </div>
                             <div className="flex gap-4 text-muted-foreground text-xs">
-                              {customer.email && (
+                              {customer.profiles?.email && (
                                 <span className="flex items-center gap-1">
                                   <Mail className="h-3 w-3" />
-                                  {customer.email}
+                                  {customer.profiles.email}
                                 </span>
                               )}
-                              {customer.phone && (
+                              {customer.profiles?.phone && (
                                 <span className="flex items-center gap-1">
                                   <Phone className="h-3 w-3" />
-                                  {customer.phone}
+                                  {customer.profiles.phone}
                                 </span>
                               )}
                             </div>

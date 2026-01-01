@@ -63,10 +63,18 @@ export {
   confirmAppointment,
   markAppointmentNoShow,
   markAppointmentCompleted,
+  getAdminCalendarAppointments,
+  adminCancelAppointment,
+  adminConfirmAppointment,
+  adminUpdateAppointmentTime,
   type BookingPageData,
   type CreateReservationResult,
   type NoShowResult,
   type CompleteResult,
+  type AdminCalendarAppointment,
+  type AdminCancelResult,
+  type AdminConfirmResult,
+  type AdminUpdateTimeResult,
 } from './booking';
 
 // Auth
